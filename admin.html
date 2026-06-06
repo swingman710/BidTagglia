@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Battag Bid — Admin</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="backdrop"></div>
+
+    <div class="app-shell">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="logo">
+          <span class="dot">BB</span>
+          <span>Battag Bid</span>
+        </div>
+
+        <div class="nav-label">Admin</div>
+        <button class="nav-item active"><span class="ic">≣</span> Dropdown lists</button>
+        <a href="dashboard.html" class="nav-item" style="text-decoration: none">
+          <span class="ic">←</span> Back to app
+        </a>
+
+        <div class="spacer"></div>
+
+        <div class="user-card">
+          <span class="avatar">A</span>
+          <div class="meta">
+            <div class="name">Administrator</div>
+            <div class="role">Admin access</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="app-main">
+        <div class="topbar">
+          <div class="welcome">
+            <div class="page-title">Dropdown lists</div>
+            <div class="page-sub">
+              Manage the option lists used by the New Opportunity form.
+            </div>
+          </div>
+          <button id="logout" class="btn-ghost">Sign out</button>
+        </div>
+
+        <!-- Add a new list -->
+        <section class="panel">
+          <h2>Add a dropdown</h2>
+          <form id="new-list-form" class="new-list" autocomplete="off">
+            <div class="field">
+              <label for="new-list-name">Dropdown name</label>
+              <input
+                type="text"
+                id="new-list-name"
+                placeholder="e.g. Client, Owner, Stage"
+                required
+              />
+            </div>
+            <button type="submit" class="btn-primary inline">Add dropdown</button>
+          </form>
+        </section>
+
+        <!-- Existing lists -->
+        <div id="lists" class="admin-grid"></div>
+        <div id="lists-empty" class="empty" style="display: none">
+          No dropdowns yet — add one above.
+        </div>
+      </main>
+    </div>
+
+    <script src="lists.js"></script>
+    <script src="admin.js"></script>
+  </body>
+</html>

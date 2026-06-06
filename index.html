@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Battag Bid — Sign in</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="login-page">
+    <div class="backdrop"></div>
+    <main class="login-card">
+      <div class="brand">
+        <div class="brand-mark">BB</div>
+        <h1 id="title">Battag Bid</h1>
+        <p id="brand-sub">Bid &amp; opportunity tracker</p>
+      </div>
+
+      <div id="error" class="error">Incorrect username or password.</div>
+
+      <form id="login-form" autocomplete="off">
+        <div class="field">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" required />
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required />
+        </div>
+
+        <button type="submit" class="btn-primary" id="submit-btn">Sign in</button>
+      </form>
+
+      <button type="button" id="admin-toggle" class="admin-toggle">
+        Admin access →
+      </button>
+
+      <p class="login-foot" id="foot">Authorized users only</p>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

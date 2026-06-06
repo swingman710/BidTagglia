@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Battag Bid</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="backdrop"></div>
+
+    <div class="app-shell">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="logo">
+          <span class="dot">BB</span>
+          <span>Battag Bid</span>
+        </div>
+
+        <div class="nav-label">Menu</div>
+        <button class="nav-item active"><span class="ic">◆</span> Opportunities</button>
+
+        <div class="nav-label">Others</div>
+        <button class="nav-item"><span class="ic">⚙</span> Settings</button>
+        <button class="nav-item"><span class="ic">?</span> Support</button>
+
+        <div class="spacer"></div>
+
+        <div class="user-card">
+          <span class="avatar" id="user-avatar">T</span>
+          <div class="meta">
+            <div class="name" id="user-name">trossi</div>
+            <div class="role">Authorized user</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="app-main">
+        <div class="topbar">
+          <div class="search">
+            <span class="ic">⌕</span>
+            <input id="search" type="text" placeholder="Search opportunities…" />
+          </div>
+          <div style="display: flex; gap: 12px; align-items: center">
+            <button id="new-opp" class="btn-primary inline">+ New Opportunity</button>
+            <button id="logout" class="btn-ghost">Sign out</button>
+          </div>
+        </div>
+
+        <div class="welcome">
+          <div class="page-title">Opportunities</div>
+          <div class="page-sub">Create and track bid opportunities.</div>
+        </div>
+
+        <!-- Stat cards -->
+        <section class="stats">
+          <div class="stat">
+            <div class="label">Total opportunities</div>
+            <div class="value" id="stat-count">0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Total value</div>
+            <div class="value accent" id="stat-total">$0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Average value</div>
+            <div class="value" id="stat-avg">$0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Largest opportunity</div>
+            <div class="value good" id="stat-top">$0</div>
+          </div>
+        </section>
+
+        <!-- Opportunities table -->
+        <section class="panel">
+          <div class="table-head">
+            <h2>Saved opportunities</h2>
+            <span id="count" class="count-pill">0</span>
+          </div>
+
+          <table class="bids">
+            <thead>
+              <tr id="table-head-row">
+                <th>Opportunity</th>
+                <th class="col-value">Value</th>
+                <!-- dynamic dropdown columns injected here -->
+                <th class="col-actions"></th>
+              </tr>
+            </thead>
+            <tbody id="bid-rows"></tbody>
+          </table>
+
+          <div id="empty" class="empty">No opportunities yet — add one above.</div>
+        </section>
+      </main>
+    </div>
+
+    <!-- New Opportunity modal -->
+    <div id="modal" class="modal-overlay" hidden>
+      <div class="modal">
+        <div class="modal-head">
+          <h2>New Opportunity</h2>
+          <button class="modal-close" id="modal-close" title="Close">✕</button>
+        </div>
+        <form id="opp-form" class="opp-form" autocomplete="off">
+          <div class="field full">
+            <label for="opp-name">Opportunity name</label>
+            <input type="text" id="opp-name" required />
+          </div>
+          <div class="field">
+            <label for="opp-value">Value</label>
+            <div class="input-prefix">
+              <span>$</span>
+              <input type="number" id="opp-value" min="0" step="0.01" required />
+            </div>
+          </div>
+          <!-- dynamic dropdowns injected here -->
+          <div id="dynamic-fields" style="display: contents"></div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-ghost" id="modal-cancel">Cancel</button>
+            <button type="submit" class="btn-primary">Save opportunity</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="lists.js"></script>
+    <script src="dashboard.js"></script>
+  </body>
+</html>
