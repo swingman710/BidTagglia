@@ -569,6 +569,14 @@ table.bids .col-actions {
   white-space: nowrap;
 }
 
+/* Project Manager + Opportunity Status: equal fixed width */
+table.bids th.col-pm,
+table.bids td.col-pm,
+table.bids th.col-status,
+table.bids td.col-status {
+  width: 190px;
+}
+
 /* Status pills */
 .status {
   display: inline-flex;
@@ -599,6 +607,10 @@ table.bids .col-actions {
 .status.lost {
   color: var(--red);
   background: var(--red-soft);
+}
+.status.hold {
+  color: var(--amber);
+  background: #fdf0db;
 }
 
 .empty {

@@ -73,6 +73,15 @@ function oppValue(o) {
   return Number(o.budgetedProjectValue ?? o.value ?? 0) || 0;
 }
 
+// Map an opportunity status to a pill color class.
+function statusClass(status) {
+  const v = (status || "").toLowerCase();
+  if (v.includes("won")) return "won";
+  if (v.includes("lost") || v.includes("no bid")) return "lost";
+  if (v.includes("hold")) return "hold";
+  return "open";
+}
+
 function distinctPrev(key) {
   const set = new Set();
   for (const o of loadOpps()) {
@@ -144,17 +153,21 @@ function render() {
     valueTd.textContent = currency.format(oppValue(opp));
 
     const pmTd = document.createElement("td");
+    pmTd.className = "col-pm";
     pmTd.textContent = opp.projectManager || "—";
 
-    const actionTd = document.createElement("td");
-    actionTd.className = "col-actions";
-    const del = document.createElement("button");
-    del.className = "btn-delete";
-    del.textContent = "Delete";
-    del.addEventListener("click", () => deleteOpp(opp.id));
-    actionTd.appendChild(del);
+    const statusTd = document.createElement("td");
+    statusTd.className = "col-status";
+    if (opp.status) {
+      const pill = document.createElement("span");
+      pill.className = `status ${statusClass(opp.status)}`;
+      pill.textContent = opp.status;
+      statusTd.appendChild(pill);
+    } else {
+      statusTd.textContent = "—";
+    }
 
-    tr.append(nameTd, divTd, dueTd, valueTd, pmTd, actionTd);
+    tr.append(nameTd, divTd, dueTd, valueTd, pmTd, statusTd);
     rows.appendChild(tr);
   }
 }
@@ -308,6 +321,7 @@ function buildMultiCombo(container, options) {
 function buildForm() {
   // Dropdowns
   fillSelect("f-division", FIELD_LISTS.division);
+  fillSelect("f-status", FIELD_LISTS.opportunityStatus);
   fillSelect("f-bid-category", FIELD_LISTS.bidCategory);
   fillSelect("f-bid-type", FIELD_LISTS.bidType);
   fillSelect("f-contract-type", FIELD_LISTS.contractType);
@@ -402,6 +416,7 @@ oppForm.addEventListener("submit", (e) => {
     division: val("f-division"),
     internalBidNumber: val("f-internal-number"),
     projectManager: val("f-pm"),
+    status: val("f-status"),
     leadEstimator: val("f-lead-estimator"),
 
     ownerCustomer: val("f-owner"),

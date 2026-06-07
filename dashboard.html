@@ -90,8 +90,8 @@
                   <th>Division</th>
                   <th>Bid Due</th>
                   <th class="col-value">Project Value</th>
-                  <th>Project Manager</th>
-                  <th class="col-actions"></th>
+                  <th class="col-pm">Project Manager</th>
+                  <th class="col-status">Opportunity Status</th>
                 </tr>
               </thead>
               <tbody id="bid-rows"></tbody>
@@ -128,13 +128,17 @@
                 <select id="f-division"></select>
               </div>
               <div class="field">
+                <label for="f-pm">Project manager</label>
+                <input type="text" id="f-pm" list="dl-pm" placeholder="Select or type…" />
+                <datalist id="dl-pm"></datalist>
+              </div>
+              <div class="field">
                 <label for="f-internal-number">Internal bid number</label>
                 <input type="text" id="f-internal-number" />
               </div>
               <div class="field">
-                <label for="f-pm">Project manager</label>
-                <input type="text" id="f-pm" list="dl-pm" placeholder="Select or type…" />
-                <datalist id="dl-pm"></datalist>
+                <label for="f-status">Opportunity status</label>
+                <select id="f-status"></select>
               </div>
               <div class="field">
                 <label for="f-lead-estimator">Lead estimator</label>

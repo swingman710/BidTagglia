@@ -7,6 +7,12 @@ const FIELD_LISTS = {
   // Dropdown
   division: ["BEI", "BAI", "BAX", "BIT", "BEI-PHI", "BEI-CHE", "BPS"],
 
+  // Dropdown
+  opportunityStatus: [
+    "Opportunity", "Pending", "Pursuing", "Budgeting", "Lost", "No Bid",
+    "On Hold (Bid)", "Won",
+  ],
+
   // Searchable combobox (single)
   projectManager: [
     "Bill Ossowski", "Christopher Dion", "Roy Dowell", "James Foraker",
