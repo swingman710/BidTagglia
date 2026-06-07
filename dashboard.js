@@ -312,6 +312,7 @@ function buildForm() {
   fillSelect("f-bid-type", FIELD_LISTS.bidType);
   fillSelect("f-contract-type", FIELD_LISTS.contractType);
   fillSelect("f-delivery-method", FIELD_LISTS.deliveryMethod);
+  fillSelect("f-market-segment", FIELD_LISTS.marketSegment);
   fillSelect("f-state", STATES);
 
   // Searchable comboboxes (single)
@@ -321,9 +322,6 @@ function buildForm() {
 
   // Comboboxes that learn from previous entries
   for (const [key, id] of PREV_COMBOS) fillDatalist(id, distinctPrev(key));
-
-  // Checkboxes (multi)
-  fillCheckgroup("cg-market-segment", FIELD_LISTS.marketSegment);
 
   // Searchable multi-combobox (multi)
   buildMultiCombo(document.getElementById("mc-local-unions"), FIELD_LISTS.localUnions);
@@ -412,7 +410,7 @@ oppForm.addEventListener("submit", (e) => {
     engineer: val("f-engineer"),
     localUnions: document.getElementById("mc-local-unions")._getSelected(),
 
-    marketSegment: checkedValues("cg-market-segment"),
+    marketSegment: val("f-market-segment"),
     industry: val("f-industry"),
     bidCategory: val("f-bid-category"),
     bidType: val("f-bid-type"),
