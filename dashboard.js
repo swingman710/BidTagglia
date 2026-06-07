@@ -22,6 +22,7 @@ document.getElementById("logout").addEventListener("click", () => {
 // is refreshed from Supabase on load and after every write.
 
 let oppsCache = [];
+let estimatorChart = null;
 
 function loadOpps() {
   return oppsCache;
@@ -47,6 +48,7 @@ async function fetchOpps() {
 async function refreshOpps() {
   await fetchOpps();
   render();
+  renderCharts(oppsCache);
 }
 
 // ---------- Static option sets ----------
@@ -99,6 +101,26 @@ function statusClass(status) {
   if (v.includes("hold")) return "hold";
   return "open";
 }
+
+// "Active" = still in play (excludes Won / Lost / No Bid).
+const ACTIVE_STATUSES = [
+  "Opportunity", "Pending", "Pursuing", "Budgeting", "On Hold (Bid)",
+];
+function isActive(o) {
+  return ACTIVE_STATUSES.includes(o.status);
+}
+
+// Funnel segment colors per status.
+const STATUS_COLORS = {
+  "Opportunity": "#2563eb",
+  "Pending": "#0891b2",
+  "Pursuing": "#7c3aed",
+  "Budgeting": "#d97706",
+  "On Hold (Bid)": "#64748b",
+  "Won": "#16a34a",
+  "Lost": "#dc2626",
+  "No Bid": "#475569",
+};
 
 function distinctPrev(key) {
   const set = new Set();
@@ -188,6 +210,135 @@ function render() {
     tr.append(nameTd, divTd, dueTd, valueTd, pmTd, statusTd);
     rows.appendChild(tr);
   }
+}
+
+// ---------- Charts ----------
+
+function renderCharts(opps) {
+  renderFunnel(opps);
+  if (typeof Chart !== "undefined") renderEstimatorChart(opps);
+}
+
+// Bid pipeline funnel: one segment per status, sized by total project value.
+function renderFunnel(opps) {
+  const el = document.getElementById("funnel");
+  if (!el) return;
+
+  const totals = {};
+  for (const o of opps) {
+    const v = oppValue(o);
+    if (v <= 0) continue;
+    const s = o.status || "Unspecified";
+    totals[s] = (totals[s] || 0) + v;
+  }
+
+  const segs = Object.entries(totals)
+    .map(([status, value]) => ({ status, value }))
+    .sort((a, b) => b.value - a.value);
+
+  if (!segs.length) {
+    el.innerHTML = '<div class="chart-empty">No pipeline data yet.</div>';
+    return;
+  }
+
+  const n = segs.length;
+  const max = segs[0].value;
+  const minW = 16; // smallest segment width (%)
+  const gap = 1.4;
+  const segH = 100 / n;
+  const widthPct = (v) => minW + (100 - minW) * (v / max);
+
+  let polys = "";
+  let labels = "";
+  segs.forEach((seg, i) => {
+    const topW = widthPct(seg.value);
+    const botW = i < n - 1 ? widthPct(segs[i + 1].value) : topW;
+    const y0 = i * segH + gap / 2;
+    const y1 = (i + 1) * segH - gap / 2;
+    const color = STATUS_COLORS[seg.status] || "#94a3b8";
+    polys +=
+      `<polygon points="${(100 - topW) / 2},${y0} ${(100 + topW) / 2},${y0} ` +
+      `${(100 + botW) / 2},${y1} ${(100 - botW) / 2},${y1}" fill="${color}">` +
+      `<title>${seg.status}: ${currency.format(seg.value)}</title></polygon>`;
+    const top = ((i + 0.5) / n) * 100;
+    labels +=
+      `<div class="funnel-label" style="top:${top}%">` +
+      `${seg.status} · ${currency.format(seg.value)}</div>`;
+  });
+
+  el.innerHTML =
+    `<svg viewBox="0 0 100 100" preserveAspectRatio="none">${polys}</svg>` +
+    `<div class="funnel-labels">${labels}</div>`;
+}
+
+// Line chart: # of active opportunities per lead estimator.
+function renderEstimatorChart(opps) {
+  const canvas = document.getElementById("estimatorChart");
+  if (!canvas) return;
+  const body = canvas.parentElement;
+
+  const counts = {};
+  for (const o of opps) {
+    if (!isActive(o)) continue;
+    const e = (o.leadEstimator || "").trim();
+    if (!e) continue;
+    counts[e] = (counts[e] || 0) + 1;
+  }
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const labels = entries.map((e) => e[0]);
+  const data = entries.map((e) => e[1]);
+
+  let emptyEl = body.querySelector(".chart-empty");
+  if (estimatorChart) estimatorChart.destroy();
+
+  if (!labels.length) {
+    canvas.style.display = "none";
+    if (!emptyEl) {
+      emptyEl = document.createElement("div");
+      emptyEl.className = "chart-empty";
+      emptyEl.textContent = "No active bids yet.";
+      body.appendChild(emptyEl);
+    }
+    return;
+  }
+  canvas.style.display = "";
+  if (emptyEl) emptyEl.remove();
+
+  estimatorChart = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Active opportunities",
+          data,
+          borderColor: "#2563eb",
+          backgroundColor: "rgba(37,99,235,0.12)",
+          fill: true,
+          tension: 0.35,
+          pointRadius: 4,
+          pointBackgroundColor: "#2563eb",
+          pointHoverRadius: 6,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { precision: 0, stepSize: 1 },
+          title: { display: true, text: "# of active opportunities" },
+        },
+        x: {
+          title: { display: true, text: "Lead estimator" },
+          ticks: { maxRotation: 60, minRotation: 30, autoSkip: false, font: { size: 10 } },
+        },
+      },
+    },
+  });
 }
 
 // ---------- Form field builders ----------

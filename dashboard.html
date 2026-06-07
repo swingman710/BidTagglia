@@ -55,6 +55,22 @@
           </div>
         </div>
 
+        <!-- Charts -->
+        <section class="charts">
+          <div class="panel chart-card">
+            <h2>Bid Pipeline</h2>
+            <div class="chart-body">
+              <div id="funnel" class="funnel"></div>
+            </div>
+          </div>
+          <div class="panel chart-card">
+            <h2>Active Bids by Lead Estimator</h2>
+            <div class="chart-body">
+              <canvas id="estimatorChart"></canvas>
+            </div>
+          </div>
+        </section>
+
         <!-- Stat strip -->
         <section class="stats">
           <div class="stat">
@@ -306,6 +322,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="supabase.js"></script>
     <script src="data.js"></script>
     <script src="dashboard.js"></script>
