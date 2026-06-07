@@ -16,19 +16,37 @@ document.getElementById("logout").addEventListener("click", () => {
   window.location.href = "index.html";
 });
 
-// ---------- Opportunity storage ----------
-const STORAGE_KEY = "battag_opportunities";
+// ---------- Opportunity storage (Supabase) ----------
+// Each bid is one row: { id, created_at, data: <bid object> }. We keep an
+// in-memory cache so render()/distinctPrev() can stay synchronous; the cache
+// is refreshed from Supabase on load and after every write.
+
+let oppsCache = [];
 
 function loadOpps() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-  } catch {
-    return [];
-  }
+  return oppsCache;
 }
 
-function saveOpps(opps) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(opps));
+async function fetchOpps() {
+  const { data, error } = await sb
+    .from(SUPABASE_TABLE)
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("Supabase load error:", error.message);
+    return oppsCache;
+  }
+  oppsCache = (data || []).map((row) => ({
+    ...row.data,
+    id: row.id,
+    createdAt: row.created_at,
+  }));
+  return oppsCache;
+}
+
+async function refreshOpps() {
+  await fetchOpps();
+  render();
 }
 
 // ---------- Static option sets ----------
@@ -385,20 +403,22 @@ function checkedValues(cgId) {
 
 // ---------- Actions ----------
 
-function addOpp(opp) {
-  const opps = loadOpps();
-  opps.push({
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    createdAt: new Date().toISOString(),
-    ...opp,
-  });
-  saveOpps(opps);
-  render();
+async function addOpp(opp) {
+  const { error } = await sb.from(SUPABASE_TABLE).insert({ data: opp });
+  if (error) {
+    alert("Could not save opportunity: " + error.message);
+    return;
+  }
+  await refreshOpps();
 }
 
-function deleteOpp(id) {
-  saveOpps(loadOpps().filter((o) => o.id !== id));
-  render();
+async function deleteOpp(id) {
+  const { error } = await sb.from(SUPABASE_TABLE).delete().eq("id", id);
+  if (error) {
+    alert("Could not delete opportunity: " + error.message);
+    return;
+  }
+  await refreshOpps();
 }
 
 oppForm.addEventListener("submit", (e) => {
@@ -454,4 +474,4 @@ oppForm.addEventListener("submit", (e) => {
 
 search.addEventListener("input", render);
 
-render();
+refreshOpps();
