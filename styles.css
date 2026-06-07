@@ -252,6 +252,20 @@ textarea:focus {
   letter-spacing: -0.5px;
 }
 
+/* Company logo in the header */
+.brand-logo {
+  align-self: center;
+  height: 34px;
+  width: auto;
+  display: block;
+}
+
+/* Login card uses a larger, centered logo */
+.login-card .brand-logo {
+  height: 64px;
+  margin: 0 auto 14px;
+}
+
 .brand-word {
   font-size: 22px;
   font-weight: 800;
