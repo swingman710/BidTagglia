@@ -28,6 +28,66 @@ function loadOpps() {
   return oppsCache;
 }
 
+// Maps form (camelCase) field keys <-> Supabase (snake_case) columns.
+const COLUMN_MAP = {
+  name: "name",
+  bidDueDate: "bid_due_date",
+  division: "division",
+  internalBidNumber: "internal_bid_number",
+  projectManager: "project_manager",
+  status: "status",
+  leadEstimator: "lead_estimator",
+  ownerCustomer: "owner_customer",
+  cm: "cm",
+  architect: "architect",
+  engineer: "engineer",
+  localUnions: "local_unions",
+  marketSegment: "market_segment",
+  industry: "industry",
+  bidCategory: "bid_category",
+  bidType: "bid_type",
+  contractType: "contract_type",
+  deliveryMethod: "delivery_method",
+  flags: "flags",
+  description: "description",
+  projectAddress: "project_address",
+  city: "city",
+  zipCode: "zip_code",
+  state: "state",
+  budgetedProjectValue: "budgeted_project_value",
+  budgetedCost: "budgeted_cost",
+  budgetedLaborHours: "budgeted_labor_hours",
+  budgetedSquareFootage: "budgeted_square_footage",
+  estStartDate: "est_start_date",
+  estEndDate: "est_end_date",
+  docsReceivedDate: "docs_received_date",
+};
+
+// Date columns can't accept "" — send null instead.
+const DATE_FIELDS = new Set([
+  "bidDueDate", "estStartDate", "estEndDate", "docsReceivedDate",
+]);
+
+// Form object -> DB row (column-per-field).
+function toRow(opp) {
+  const row = {};
+  for (const [jsKey, col] of Object.entries(COLUMN_MAP)) {
+    let v = opp[jsKey];
+    if (DATE_FIELDS.has(jsKey)) v = v || null;
+    row[col] = v;
+  }
+  return row;
+}
+
+// DB row -> form object.
+function fromRow(row) {
+  const opp = { id: row.id, createdAt: row.created_at };
+  for (const [jsKey, col] of Object.entries(COLUMN_MAP)) {
+    opp[jsKey] = row[col];
+  }
+  return opp;
+}
+
 async function fetchOpps() {
   const { data, error } = await sb
     .from(SUPABASE_TABLE)
@@ -37,11 +97,7 @@ async function fetchOpps() {
     console.error("Supabase load error:", error.message);
     return oppsCache;
   }
-  oppsCache = (data || []).map((row) => ({
-    ...row.data,
-    id: row.id,
-    createdAt: row.created_at,
-  }));
+  oppsCache = (data || []).map(fromRow);
   return oppsCache;
 }
 
@@ -582,7 +638,7 @@ function checkedValues(cgId) {
 // ---------- Actions ----------
 
 async function addOpp(opp) {
-  const { error } = await sb.from(SUPABASE_TABLE).insert({ data: opp });
+  const { error } = await sb.from(SUPABASE_TABLE).insert(toRow(opp));
   if (error) {
     alert("Could not save opportunity: " + error.message);
     return;
