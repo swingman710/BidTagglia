@@ -89,6 +89,16 @@ function formatDate(value) {
   return d.toLocaleDateString();
 }
 
+// Whole days from today until the due date. Negative = past due.
+function daysUntil(value) {
+  if (!value) return null;
+  const due = new Date(`${value}T00:00:00`);
+  if (isNaN(due)) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((due - today) / 86400000);
+}
+
 function oppValue(o) {
   return Number(o.budgetedProjectValue ?? o.value ?? 0) || 0;
 }
@@ -196,6 +206,15 @@ function render() {
     const dueTd = document.createElement("td");
     dueTd.textContent = formatDate(opp.bidDueDate);
 
+    const daysTd = document.createElement("td");
+    const days = daysUntil(opp.bidDueDate);
+    if (days === null) {
+      daysTd.textContent = "—";
+    } else {
+      daysTd.textContent = days;
+      if (days < 0) daysTd.className = "days-overdue";
+    }
+
     const valueTd = document.createElement("td");
     valueTd.className = "col-value";
     valueTd.textContent = currency.format(oppValue(opp));
@@ -215,7 +234,7 @@ function render() {
       statusTd.textContent = "—";
     }
 
-    tr.append(nameTd, divTd, dueTd, valueTd, pmTd, statusTd);
+    tr.append(nameTd, divTd, dueTd, daysTd, valueTd, pmTd, statusTd);
     rows.appendChild(tr);
   }
 }

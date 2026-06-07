@@ -636,11 +636,17 @@ table.bids td:first-child {
 }
 
 /* highlighted (value) column — Finviz's purple-tinted sorted column */
-table.bids th:nth-child(4),
-table.bids td:nth-child(4) {
+table.bids th:nth-child(5),
+table.bids td:nth-child(5) {
   background: var(--col-accent);
   border-left: 1px solid var(--col-accent-bd);
   border-right: 1px solid var(--col-accent-bd);
+}
+
+/* Past-due bids */
+table.bids td.days-overdue {
+  color: var(--red);
+  font-weight: 600;
 }
 
 table.bids .col-value {
