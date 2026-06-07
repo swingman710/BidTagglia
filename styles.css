@@ -968,6 +968,112 @@ table.bids .col-actions {
   padding: 6px 2px;
 }
 
+/* Searchable multi-select combobox (Local Unions) */
+.multicombo {
+  position: relative;
+}
+
+.mc-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 5px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  cursor: text;
+}
+
+.mc-control:focus-within {
+  border-color: var(--blue);
+  box-shadow: var(--ring);
+}
+
+.mc-chips {
+  display: contents;
+}
+
+.mc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--blue-soft);
+  color: var(--blue-dark);
+  border: 1px solid #cfe0fb;
+  border-radius: 4px;
+  padding: 2px 4px 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mc-chip-x {
+  border: none;
+  background: transparent;
+  color: var(--blue-dark);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.mc-chip-x:hover {
+  color: var(--red);
+}
+
+.mc-input {
+  flex: 1;
+  min-width: 90px;
+  border: none !important;
+  outline: none;
+  box-shadow: none !important;
+  padding: 3px 2px !important;
+  font-size: 13px;
+  background: transparent;
+}
+
+.mc-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  box-shadow: var(--shadow-md);
+}
+
+.mc-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 11px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.mc-option:hover {
+  background: var(--band-2);
+}
+
+.mc-option input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+
+.mc-none {
+  padding: 9px 11px;
+  font-size: 13px;
+  color: var(--faint);
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;

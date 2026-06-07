@@ -4,7 +4,7 @@ if (!currentUser) {
   window.location.href = "index.html";
 }
 
-// Personalize the sidebar user card.
+// Personalize the brand-header user chip.
 document.getElementById("user-name").textContent = currentUser || "user";
 document.getElementById("user-avatar").textContent = (currentUser || "?")
   .charAt(0)
@@ -17,9 +17,6 @@ document.getElementById("logout").addEventListener("click", () => {
 });
 
 // ---------- Opportunity storage ----------
-// Placeholder persistence using localStorage. Replace load/save (and addOpp)
-// with the SharePoint API later and the rest of the UI stays the same.
-
 const STORAGE_KEY = "battag_opportunities";
 
 function loadOpps() {
@@ -36,9 +33,6 @@ function saveOpps(opps) {
 
 // ---------- Static option sets ----------
 
-// Division is a fixed pick list (not admin-managed).
-const DIVISIONS = ["BAI", "BEI", "BAX", "BIT", "BEI-PHI", "BEI-", "BPS"];
-
 const STATES = [
   "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado",
   "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho",
@@ -49,23 +43,6 @@ const STATES = [
   "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina",
   "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia",
   "Washington", "West Virginia", "Wisconsin", "Wyoming",
-];
-
-// Admin-managed single-value comboboxes: [admin list name, datalist element id].
-const ADMIN_COMBOS = [
-  ["Project Manager", "dl-pm"],
-  ["Lead Estimator", "dl-lead-estimator"],
-  ["Bid Category", "dl-bid-category"],
-  ["Bid Type", "dl-bid-type"],
-  ["Contract Type", "dl-contract-type"],
-  ["Delivery Method", "dl-delivery-method"],
-];
-
-// Admin-managed multi-select fields: [admin list name, checkgroup element id].
-const ADMIN_MULTIS = [
-  ["Local Unions", "cg-local-unions"],
-  ["Market Segment", "cg-market-segment"],
-  ["Industry", "cg-industry"],
 ];
 
 // Comboboxes that auto-populate from values used on previous opps:
@@ -87,18 +64,15 @@ const currency = new Intl.NumberFormat("en-US", {
 
 function formatDate(value) {
   if (!value) return "—";
-  // Stored as yyyy-mm-dd; anchor to local noon to avoid TZ off-by-one.
   const d = new Date(`${value}T12:00:00`);
   if (isNaN(d)) return value;
   return d.toLocaleDateString();
 }
 
-// Primary headline value for stats/table (new field, with legacy fallback).
 function oppValue(o) {
   return Number(o.budgetedProjectValue ?? o.value ?? 0) || 0;
 }
 
-// Distinct, non-empty previous values for a field (for auto-populate comboboxes).
 function distinctPrev(key) {
   const set = new Set();
   for (const o of loadOpps()) {
@@ -135,8 +109,9 @@ function render() {
   const query = search.value.trim().toLowerCase();
   const visible = query
     ? opps.filter((o) =>
-        [o.name, o.division, o.projectManager, o.ownerCustomer]
-          .some((f) => (f || "").toLowerCase().includes(query))
+        [o.name, o.division, o.projectManager, o.ownerCustomer].some((f) =>
+          (f || "").toLowerCase().includes(query)
+        )
       )
     : opps;
 
@@ -184,7 +159,7 @@ function render() {
   }
 }
 
-// ---------- Modal ----------
+// ---------- Form field builders ----------
 
 const modal = document.getElementById("modal");
 const oppForm = document.getElementById("opp-form");
@@ -217,13 +192,6 @@ function fillSelect(id, options) {
 function fillCheckgroup(id, options) {
   const cg = document.getElementById(id);
   cg.innerHTML = "";
-  if (!options.length) {
-    const hint = document.createElement("span");
-    hint.className = "cg-hint";
-    hint.textContent = "No options yet — add them on the admin page.";
-    cg.appendChild(hint);
-    return;
-  }
   for (const opt of options) {
     const label = document.createElement("label");
     label.className = "check";
@@ -237,27 +205,134 @@ function fillCheckgroup(id, options) {
   }
 }
 
-function buildForm() {
-  const lists = loadLists();
+// Searchable multi-select combobox: a text field that filters a dropdown of
+// checkbox options; checking adds it as a chip. Stores the selection on the
+// container so readForm() can pull it via container._getSelected().
+function buildMultiCombo(container, options) {
+  container.innerHTML = "";
+  const selected = new Set();
 
-  fillSelect("f-division", DIVISIONS);
-  fillSelect("f-state", STATES);
+  const control = document.createElement("div");
+  control.className = "mc-control";
+  const chips = document.createElement("span");
+  chips.className = "mc-chips";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "mc-input";
+  input.placeholder = "Search…";
+  control.append(chips, input);
 
-  for (const [name, id] of ADMIN_COMBOS) fillDatalist(id, lists[name] || []);
-  for (const [name, id] of ADMIN_MULTIS) fillCheckgroup(id, lists[name] || []);
-  for (const [key, id] of PREV_COMBOS) fillDatalist(id, distinctPrev(key));
-}
+  const panel = document.createElement("div");
+  panel.className = "mc-panel";
+  panel.hidden = true;
 
-async function openModal() {
-  oppForm.reset();
-  // Refresh any SharePoint-backed dropdowns before building the form.
-  if (window.BBSharePoint && window.BBSharePoint.enabled) {
-    try {
-      await window.BBSharePoint.sync();
-    } catch (e) {
-      console.warn("SharePoint sync failed:", e);
+  container.append(control, panel);
+
+  function renderChips() {
+    chips.innerHTML = "";
+    for (const v of selected) {
+      const chip = document.createElement("span");
+      chip.className = "mc-chip";
+      chip.textContent = v;
+      const x = document.createElement("button");
+      x.type = "button";
+      x.className = "mc-chip-x";
+      x.textContent = "✕";
+      x.addEventListener("click", (e) => {
+        e.stopPropagation();
+        selected.delete(v);
+        renderChips();
+        if (!panel.hidden) renderPanel();
+      });
+      chip.appendChild(x);
+      chips.appendChild(chip);
     }
   }
+
+  function renderPanel() {
+    const q = input.value.trim().toLowerCase();
+    panel.innerHTML = "";
+    const matches = options.filter((o) => o.toLowerCase().includes(q));
+    if (!matches.length) {
+      const none = document.createElement("div");
+      none.className = "mc-none";
+      none.textContent = "No matches";
+      panel.appendChild(none);
+      return;
+    }
+    for (const o of matches) {
+      const row = document.createElement("label");
+      row.className = "mc-option";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = selected.has(o);
+      cb.addEventListener("change", () => {
+        if (cb.checked) selected.add(o);
+        else selected.delete(o);
+        renderChips();
+      });
+      const span = document.createElement("span");
+      span.textContent = o;
+      row.append(cb, span);
+      panel.appendChild(row);
+    }
+  }
+
+  function open() {
+    panel.hidden = false;
+    renderPanel();
+  }
+  function close() {
+    panel.hidden = true;
+  }
+
+  control.addEventListener("click", () => {
+    input.focus();
+    open();
+  });
+  input.addEventListener("input", open);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      close();
+      input.blur();
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (!container.contains(e.target)) close();
+  });
+
+  container._getSelected = () => [...selected];
+  renderChips();
+}
+
+function buildForm() {
+  // Dropdowns
+  fillSelect("f-division", FIELD_LISTS.division);
+  fillSelect("f-bid-category", FIELD_LISTS.bidCategory);
+  fillSelect("f-bid-type", FIELD_LISTS.bidType);
+  fillSelect("f-contract-type", FIELD_LISTS.contractType);
+  fillSelect("f-delivery-method", FIELD_LISTS.deliveryMethod);
+  fillSelect("f-state", STATES);
+
+  // Searchable comboboxes (single)
+  fillDatalist("dl-pm", FIELD_LISTS.projectManager);
+  fillDatalist("dl-lead-estimator", FIELD_LISTS.leadEstimator);
+  fillDatalist("dl-industry", FIELD_LISTS.industry);
+
+  // Comboboxes that learn from previous entries
+  for (const [key, id] of PREV_COMBOS) fillDatalist(id, distinctPrev(key));
+
+  // Checkboxes (multi)
+  fillCheckgroup("cg-market-segment", FIELD_LISTS.marketSegment);
+
+  // Searchable multi-combobox (multi)
+  buildMultiCombo(document.getElementById("mc-local-unions"), FIELD_LISTS.localUnions);
+}
+
+// ---------- Modal ----------
+
+function openModal() {
+  oppForm.reset();
   buildForm();
   modal.hidden = false;
   document.getElementById("f-name").focus();
@@ -335,10 +410,10 @@ oppForm.addEventListener("submit", (e) => {
     cm: val("f-cm"),
     architect: val("f-architect"),
     engineer: val("f-engineer"),
-    localUnions: checkedValues("cg-local-unions"),
+    localUnions: document.getElementById("mc-local-unions")._getSelected(),
 
     marketSegment: checkedValues("cg-market-segment"),
-    industry: checkedValues("cg-industry"),
+    industry: val("f-industry"),
     bidCategory: val("f-bid-category"),
     bidType: val("f-bid-type"),
     contractType: val("f-contract-type"),

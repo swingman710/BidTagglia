@@ -169,8 +169,8 @@
                 <datalist id="dl-engineer"></datalist>
               </div>
               <div class="field full">
-                <label>Local unions <span class="hint-inline">(select one or more)</span></label>
-                <div class="checkgroup" id="cg-local-unions"></div>
+                <label>Local unions <span class="hint-inline">(search and select one or more)</span></label>
+                <div class="multicombo" id="mc-local-unions"></div>
               </div>
             </div>
           </fieldset>
@@ -183,29 +183,26 @@
                 <label>Market segment <span class="hint-inline">(select one or more)</span></label>
                 <div class="checkgroup" id="cg-market-segment"></div>
               </div>
-              <div class="field full">
-                <label>Industry <span class="hint-inline">(select one or more)</span></label>
-                <div class="checkgroup" id="cg-industry"></div>
+              <div class="field">
+                <label for="f-industry">Industry</label>
+                <input type="text" id="f-industry" list="dl-industry" placeholder="Search or select…" />
+                <datalist id="dl-industry"></datalist>
               </div>
               <div class="field">
                 <label for="f-bid-category">Bid category</label>
-                <input type="text" id="f-bid-category" list="dl-bid-category" placeholder="Select or type…" />
-                <datalist id="dl-bid-category"></datalist>
+                <select id="f-bid-category"></select>
               </div>
               <div class="field">
                 <label for="f-bid-type">Bid type</label>
-                <input type="text" id="f-bid-type" list="dl-bid-type" placeholder="Select or type…" />
-                <datalist id="dl-bid-type"></datalist>
+                <select id="f-bid-type"></select>
               </div>
               <div class="field">
                 <label for="f-contract-type">Contract type</label>
-                <input type="text" id="f-contract-type" list="dl-contract-type" placeholder="Select or type…" />
-                <datalist id="dl-contract-type"></datalist>
+                <select id="f-contract-type"></select>
               </div>
               <div class="field">
                 <label for="f-delivery-method">Delivery method</label>
-                <input type="text" id="f-delivery-method" list="dl-delivery-method" placeholder="Select or type…" />
-                <datalist id="dl-delivery-method"></datalist>
+                <select id="f-delivery-method"></select>
               </div>
             </div>
           </fieldset>
@@ -304,9 +301,7 @@
       </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.10.0/lib/msal-browser.min.js"></script>
-    <script src="lists.js"></script>
-    <script src="sharepoint.js"></script>
+    <script src="data.js"></script>
     <script src="dashboard.js"></script>
   </body>
 </html>
