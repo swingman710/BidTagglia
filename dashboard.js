@@ -138,14 +138,22 @@ const empty = document.getElementById("empty");
 const count = document.getElementById("count");
 const search = document.getElementById("search");
 
+function median(nums) {
+  if (!nums.length) return 0;
+  const s = [...nums].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
 function renderStats(opps) {
-  const total = opps.reduce((sum, o) => sum + oppValue(o), 0);
-  const top = opps.reduce((max, o) => Math.max(max, oppValue(o)), 0);
-  const avg = opps.length ? total / opps.length : 0;
+  const values = opps.map(oppValue);
+  const total = values.reduce((sum, v) => sum + v, 0);
+  const top = values.reduce((max, v) => Math.max(max, v), 0);
+  const med = median(values);
 
   document.getElementById("stat-count").textContent = opps.length;
   document.getElementById("stat-total").textContent = currency.format(total);
-  document.getElementById("stat-avg").textContent = currency.format(avg);
+  document.getElementById("stat-avg").textContent = currency.format(med);
   document.getElementById("stat-top").textContent = currency.format(top);
 }
 
