@@ -4,46 +4,46 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Battag Bid — Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="backdrop"></div>
-
-    <div class="app-shell">
-      <!-- Sidebar -->
-      <aside class="sidebar">
-        <div class="logo">
-          <span class="dot">BB</span>
-          <span>Battag Bid</span>
+    <!-- White brand header -->
+    <header class="appbar">
+      <div class="appbar-inner">
+        <div class="brand">
+          <span class="brand-mark">BB</span>
+          <span class="brand-word">battag<span class="brand-dot">.</span>bid</span>
+          <span class="brand-tag">Admin Console</span>
         </div>
-
-        <div class="nav-label">Admin</div>
-        <button class="nav-item active"><span class="ic">≣</span> Dropdown lists</button>
-        <a href="dashboard.html" class="nav-item" style="text-decoration: none">
-          <span class="ic">←</span> Back to app
-        </a>
-
-        <div class="spacer"></div>
-
-        <div class="user-card">
-          <span class="avatar">A</span>
-          <div class="meta">
-            <div class="name">Administrator</div>
-            <div class="role">Admin access</div>
-          </div>
+        <div class="appbar-right">
+          <span class="user-chip">
+            <span class="avatar">A</span>
+            <span class="uname">Administrator</span>
+          </span>
+          <button id="logout" class="btn-ghost sm">Sign out</button>
         </div>
-      </aside>
+      </div>
+    </header>
 
-      <!-- Main -->
-      <main class="app-main">
-        <div class="topbar">
-          <div class="welcome">
-            <div class="page-title">Dropdown lists</div>
-            <div class="page-sub">
-              Manage the option lists used by the New Opportunity form.
-            </div>
-          </div>
-          <button id="logout" class="btn-ghost">Sign out</button>
+    <!-- Dark slate nav bar -->
+    <nav class="mainnav">
+      <div class="mainnav-inner">
+        <button class="nav-tab active">Dropdown lists</button>
+        <a class="nav-tab" href="dashboard.html">← Back to app</a>
+      </div>
+    </nav>
+
+    <main class="page">
+      <div class="page-inner">
+        <div class="welcome">
+          <div class="page-title">Dropdown lists</div>
+          <div class="page-sub">Manage the option lists used by the New Opportunity form.</div>
         </div>
 
         <!-- Add a new list -->
@@ -68,8 +68,8 @@
         <div id="lists-empty" class="empty" style="display: none">
           No dropdowns yet — add one above.
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
 
     <script src="lists.js"></script>
     <script src="admin.js"></script>

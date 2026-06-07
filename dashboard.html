@@ -4,56 +4,58 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Battag Bid</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="backdrop"></div>
-
-    <div class="app-shell">
-      <!-- Sidebar -->
-      <aside class="sidebar">
-        <div class="logo">
-          <span class="dot">BB</span>
-          <span>Battag Bid</span>
+    <!-- White brand header -->
+    <header class="appbar">
+      <div class="appbar-inner">
+        <div class="brand">
+          <span class="brand-mark">BB</span>
+          <span class="brand-word">battag<span class="brand-dot">.</span>bid</span>
+          <span class="brand-tag">Bid &amp; Opportunity Tracker</span>
         </div>
-
-        <div class="nav-label">Menu</div>
-        <button class="nav-item active"><span class="ic">◆</span> Opportunities</button>
-
-        <div class="nav-label">Others</div>
-        <button class="nav-item"><span class="ic">⚙</span> Settings</button>
-        <button class="nav-item"><span class="ic">?</span> Support</button>
-
-        <div class="spacer"></div>
-
-        <div class="user-card">
-          <span class="avatar" id="user-avatar">T</span>
-          <div class="meta">
-            <div class="name" id="user-name">trossi</div>
-            <div class="role">Authorized user</div>
-          </div>
+        <div class="appbar-right">
+          <span class="user-chip">
+            <span class="avatar" id="user-avatar">T</span>
+            <span class="uname" id="user-name">trossi</span>
+          </span>
+          <button id="logout" class="btn-ghost sm">Sign out</button>
         </div>
-      </aside>
+      </div>
+    </header>
 
-      <!-- Main -->
-      <main class="app-main">
-        <div class="topbar">
+    <!-- Dark slate nav bar -->
+    <nav class="mainnav">
+      <div class="mainnav-inner">
+        <button class="nav-tab active">Opportunities</button>
+        <button class="nav-tab">Pipeline</button>
+        <button class="nav-tab">Reports</button>
+        <button class="nav-tab">Settings</button>
+        <button class="nav-tab">Support</button>
+      </div>
+    </nav>
+
+    <main class="page">
+      <div class="page-inner">
+        <!-- Light-blue controls band -->
+        <div class="controls">
           <div class="search">
             <span class="ic">⌕</span>
-            <input id="search" type="text" placeholder="Search opportunities…" />
+            <input id="search" type="text" placeholder="Search ticker, company or profile" />
           </div>
-          <div style="display: flex; gap: 12px; align-items: center">
+          <div class="controls-right">
             <button id="new-opp" class="btn-primary inline">+ New Opportunity</button>
-            <button id="logout" class="btn-ghost">Sign out</button>
           </div>
         </div>
 
-        <div class="welcome">
-          <div class="page-title">Opportunities</div>
-          <div class="page-sub">Create and track bid opportunities.</div>
-        </div>
-
-        <!-- Stat cards -->
+        <!-- Stat strip -->
         <section class="stats">
           <div class="stat">
             <div class="label">Total opportunities</div>
@@ -80,44 +82,219 @@
             <span id="count" class="count-pill">0</span>
           </div>
 
-          <table class="bids">
-            <thead>
-              <tr id="table-head-row">
-                <th>Opportunity</th>
-                <th class="col-value">Value</th>
-                <!-- dynamic dropdown columns injected here -->
-                <th class="col-actions"></th>
-              </tr>
-            </thead>
-            <tbody id="bid-rows"></tbody>
-          </table>
+          <div class="table-wrap">
+            <table class="bids">
+              <thead>
+                <tr>
+                  <th>Opportunity</th>
+                  <th>Division</th>
+                  <th>Bid Due</th>
+                  <th class="col-value">Project Value</th>
+                  <th>Project Manager</th>
+                  <th class="col-actions"></th>
+                </tr>
+              </thead>
+              <tbody id="bid-rows"></tbody>
+            </table>
+          </div>
 
           <div id="empty" class="empty">No opportunities yet — add one above.</div>
         </section>
-      </main>
-    </div>
+      </div>
+    </main>
 
     <!-- New Opportunity modal -->
     <div id="modal" class="modal-overlay" hidden>
-      <div class="modal">
+      <div class="modal modal-wide">
         <div class="modal-head">
           <h2>New Opportunity</h2>
           <button class="modal-close" id="modal-close" title="Close">✕</button>
         </div>
         <form id="opp-form" class="opp-form" autocomplete="off">
-          <div class="field full">
-            <label for="opp-name">Opportunity name</label>
-            <input type="text" id="opp-name" required />
-          </div>
-          <div class="field">
-            <label for="opp-value">Value</label>
-            <div class="input-prefix">
-              <span>$</span>
-              <input type="number" id="opp-value" min="0" step="0.01" required />
+          <!-- Section 1: General -->
+          <fieldset class="form-section">
+            <legend>General</legend>
+            <div class="section-grid">
+              <div class="field full">
+                <label for="f-name">Opportunity name <span class="req">*</span></label>
+                <input type="text" id="f-name" required />
+              </div>
+              <div class="field">
+                <label for="f-due-date">Bid due date</label>
+                <input type="date" id="f-due-date" />
+              </div>
+              <div class="field">
+                <label for="f-division">Division</label>
+                <select id="f-division"></select>
+              </div>
+              <div class="field">
+                <label for="f-internal-number">Internal bid number</label>
+                <input type="text" id="f-internal-number" />
+              </div>
+              <div class="field">
+                <label for="f-pm">Project manager</label>
+                <input type="text" id="f-pm" list="dl-pm" placeholder="Select or type…" />
+                <datalist id="dl-pm"></datalist>
+              </div>
+              <div class="field">
+                <label for="f-lead-estimator">Lead estimator</label>
+                <input type="text" id="f-lead-estimator" list="dl-lead-estimator" placeholder="Select or type…" />
+                <datalist id="dl-lead-estimator"></datalist>
+              </div>
             </div>
-          </div>
-          <!-- dynamic dropdowns injected here -->
-          <div id="dynamic-fields" style="display: contents"></div>
+          </fieldset>
+
+          <!-- Section 2: Project team -->
+          <fieldset class="form-section">
+            <legend>Project Team</legend>
+            <div class="section-grid">
+              <div class="field">
+                <label for="f-owner">Owner / customer</label>
+                <input type="text" id="f-owner" list="dl-owner" placeholder="Select or add new…" />
+                <datalist id="dl-owner"></datalist>
+              </div>
+              <div class="field">
+                <label for="f-cm">CM</label>
+                <input type="text" id="f-cm" list="dl-cm" placeholder="Select or add new…" />
+                <datalist id="dl-cm"></datalist>
+              </div>
+              <div class="field">
+                <label for="f-architect">Architect</label>
+                <input type="text" id="f-architect" list="dl-architect" placeholder="Select or add new…" />
+                <datalist id="dl-architect"></datalist>
+              </div>
+              <div class="field">
+                <label for="f-engineer">Engineer</label>
+                <input type="text" id="f-engineer" list="dl-engineer" placeholder="Select or add new…" />
+                <datalist id="dl-engineer"></datalist>
+              </div>
+              <div class="field full">
+                <label>Local unions <span class="hint-inline">(select one or more)</span></label>
+                <div class="checkgroup" id="cg-local-unions"></div>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Section 3: Classification -->
+          <fieldset class="form-section">
+            <legend>Classification</legend>
+            <div class="section-grid">
+              <div class="field full">
+                <label>Market segment <span class="hint-inline">(select one or more)</span></label>
+                <div class="checkgroup" id="cg-market-segment"></div>
+              </div>
+              <div class="field full">
+                <label>Industry <span class="hint-inline">(select one or more)</span></label>
+                <div class="checkgroup" id="cg-industry"></div>
+              </div>
+              <div class="field">
+                <label for="f-bid-category">Bid category</label>
+                <input type="text" id="f-bid-category" list="dl-bid-category" placeholder="Select or type…" />
+                <datalist id="dl-bid-category"></datalist>
+              </div>
+              <div class="field">
+                <label for="f-bid-type">Bid type</label>
+                <input type="text" id="f-bid-type" list="dl-bid-type" placeholder="Select or type…" />
+                <datalist id="dl-bid-type"></datalist>
+              </div>
+              <div class="field">
+                <label for="f-contract-type">Contract type</label>
+                <input type="text" id="f-contract-type" list="dl-contract-type" placeholder="Select or type…" />
+                <datalist id="dl-contract-type"></datalist>
+              </div>
+              <div class="field">
+                <label for="f-delivery-method">Delivery method</label>
+                <input type="text" id="f-delivery-method" list="dl-delivery-method" placeholder="Select or type…" />
+                <datalist id="dl-delivery-method"></datalist>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Section 4: Requirements & description -->
+          <fieldset class="form-section">
+            <legend>Requirements</legend>
+            <div class="section-grid">
+              <div class="field full">
+                <label>Requirements <span class="hint-inline">(select all that apply)</span></label>
+                <div class="checkgroup" id="cg-flags">
+                  <label class="check"><input type="checkbox" value="Tax Exempt" /><span>Tax exempt</span></label>
+                  <label class="check"><input type="checkbox" value="Prevailing Wage" /><span>Prevailing wage</span></label>
+                  <label class="check"><input type="checkbox" value="Performance Bond" /><span>Performance bond</span></label>
+                  <label class="check"><input type="checkbox" value="Minority Tracking Required" /><span>Minority tracking required</span></label>
+                  <label class="check"><input type="checkbox" value="Bid Bond" /><span>Bid bond</span></label>
+                  <label class="check"><input type="checkbox" value="Certified Payroll" /><span>Certified payroll</span></label>
+                </div>
+              </div>
+              <div class="field full">
+                <label for="f-description">Description</label>
+                <textarea id="f-description" rows="4" placeholder="Project description, scope, notes…"></textarea>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Section 5: Location -->
+          <fieldset class="form-section">
+            <legend>Location</legend>
+            <div class="section-grid">
+              <div class="field full">
+                <label for="f-address">Project address</label>
+                <input type="text" id="f-address" />
+              </div>
+              <div class="field">
+                <label for="f-city">City</label>
+                <input type="text" id="f-city" />
+              </div>
+              <div class="field">
+                <label for="f-zip">Zip code</label>
+                <input type="text" id="f-zip" inputmode="numeric" />
+              </div>
+              <div class="field">
+                <label for="f-state">State</label>
+                <select id="f-state"></select>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Section 6: Budget & schedule -->
+          <fieldset class="form-section">
+            <legend>Budget &amp; Schedule</legend>
+            <div class="section-grid">
+              <div class="field">
+                <label for="f-proj-value">Budgeted project value</label>
+                <div class="input-prefix">
+                  <span>$</span>
+                  <input type="number" id="f-proj-value" min="0" step="0.01" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="f-cost">Budgeted cost</label>
+                <div class="input-prefix">
+                  <span>$</span>
+                  <input type="number" id="f-cost" min="0" step="0.01" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="f-labor-hours">Budgeted labor hours</label>
+                <input type="number" id="f-labor-hours" min="0" step="1" />
+              </div>
+              <div class="field">
+                <label for="f-sqft">Budgeted square footage</label>
+                <input type="number" id="f-sqft" min="0" step="1" />
+              </div>
+              <div class="field">
+                <label for="f-start-date">Estimated project start</label>
+                <input type="date" id="f-start-date" />
+              </div>
+              <div class="field">
+                <label for="f-end-date">Estimated project end</label>
+                <input type="date" id="f-end-date" />
+              </div>
+              <div class="field">
+                <label for="f-docs-date">Documents received</label>
+                <input type="date" id="f-docs-date" />
+              </div>
+            </div>
+          </fieldset>
 
           <div class="modal-actions">
             <button type="button" class="btn-ghost" id="modal-cancel">Cancel</button>
@@ -127,7 +304,9 @@
       </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.10.0/lib/msal-browser.min.js"></script>
     <script src="lists.js"></script>
+    <script src="sharepoint.js"></script>
     <script src="dashboard.js"></script>
   </body>
 </html>
