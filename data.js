@@ -9,7 +9,7 @@ const FIELD_LISTS = {
 
   // Dropdown
   opportunityStatus: [
-    "Opportunity", "Pending", "Pursuing", "Budgeting", "Lost", "No Bid",
+    "Opportunity", "Pending", "Bidding", "Budgeting", "Lost", "No Bid",
     "On Hold (Bid)", "Won",
   ],
 
@@ -38,13 +38,12 @@ const FIELD_LISTS = {
     "Food Services", "Utility", "Banking", "Legal", "Entertainment",
     "Pharmaceutical", "Gaming", "Transportation", "Mixed Use", "Retail",
     "Insurance", "Hotel", "Media", "BAS", "Residential", "Solar", "Warehouse",
-    "Prison", "Public Works",
+    "Prison", "Public Works", "Sporting", "Casino",
   ],
 
   // Checkboxes (multi)
   marketSegment: [
-    "Commercial", "Data Center", "Federal/Government", "Food & Beverage",
-    "Healthcare", "Industrial", "Residential", "Education",
+    "Commercial", "Industrial", "Mixed Use", "Infrastructure", "Heavy Civil",
   ],
 
   // Searchable combobox with checkboxes (multi)

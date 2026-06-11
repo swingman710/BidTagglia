@@ -142,10 +142,25 @@ function formatDate(value) {
   return d.toLocaleDateString();
 }
 
+// Date + time, for values that carry a time (e.g. "2026-06-11T14:30").
+// Falls back to date-only formatting for plain "YYYY-MM-DD" values.
+function formatDateTime(value) {
+  if (!value) return "—";
+  if (!String(value).includes("T")) return formatDate(value);
+  const d = new Date(value);
+  if (isNaN(d)) return value;
+  return d.toLocaleString([], {
+    year: "numeric", month: "numeric", day: "numeric",
+    hour: "numeric", minute: "2-digit",
+  });
+}
+
 // Whole days from today until the due date. Negative = past due.
+// Accepts plain dates or datetime values; only the date part matters.
 function daysUntil(value) {
   if (!value) return null;
-  const due = new Date(`${value}T00:00:00`);
+  const datePart = String(value).split("T")[0];
+  const due = new Date(`${datePart}T00:00:00`);
   if (isNaN(due)) return null;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -257,7 +272,7 @@ function render() {
     divTd.textContent = opp.division || "—";
 
     const dueTd = document.createElement("td");
-    dueTd.textContent = formatDate(opp.bidDueDate);
+    dueTd.textContent = formatDateTime(opp.bidDueDate);
 
     const daysTd = document.createElement("td");
     const days = daysUntil(opp.bidDueDate);
