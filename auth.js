@@ -85,8 +85,48 @@ const AUTH_CONFIG = {
   }
 
   async function signOut() {
+    clearManual();
     const app = await ready();
-    await app.logoutRedirect();
+    if (app.getActiveAccount()) {
+      await app.logoutRedirect();
+    } else {
+      window.location.href = "index.html";
+    }
+  }
+
+  // ---- Manual (username/password) fallback -------------------------------
+  // Credentials live in Supabase (table app_users, bcrypt-hashed). We verify
+  // via the verify_login() RPC — the table itself is not readable by the
+  // public anon key, so passwords never reach the browser. See supabase_users.sql.
+
+  const MANUAL_KEY = "battag_manual_user";
+
+  async function manualSignIn(username, password) {
+    if (typeof sb === "undefined") {
+      console.error("Supabase client not loaded; manual sign-in unavailable.");
+      return false;
+    }
+    const { data, error } = await sb.rpc("verify_login", {
+      p_username: username,
+      p_password: password,
+    });
+    if (error) {
+      console.error("Manual sign-in error:", error.message);
+      return false;
+    }
+    if (data === true) {
+      sessionStorage.setItem(MANUAL_KEY, username);
+      return true;
+    }
+    return false;
+  }
+
+  function getManualUser() {
+    return sessionStorage.getItem(MANUAL_KEY);
+  }
+
+  function clearManual() {
+    sessionStorage.removeItem(MANUAL_KEY);
   }
 
   async function getAccount() {
@@ -94,15 +134,17 @@ const AUTH_CONFIG = {
     return app.getActiveAccount();
   }
 
-  // For gated pages: bounce to the login screen if not signed in.
-  // Returns the account, or null if a redirect was triggered.
+  // For gated pages: bounce to the login screen if not signed in by either
+  // method. Returns a normalized identity ({ name }), or null if redirecting.
   async function requireAuth() {
     const account = await getAccount();
-    if (!account) {
-      window.location.href = "index.html";
-      return null;
-    }
-    return account;
+    if (account) return { name: account.name || account.username || "user" };
+
+    const manual = getManualUser();
+    if (manual) return { name: manual };
+
+    window.location.href = "index.html";
+    return null;
   }
 
   window.BBAuth = {
@@ -112,5 +154,7 @@ const AUTH_CONFIG = {
     signOut,
     getAccount,
     requireAuth,
+    manualSignIn,
+    getManualUser,
   };
 })();

@@ -160,6 +160,25 @@ textarea:focus {
   border-radius: 2px;
 }
 
+.or-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 14px;
+  color: var(--faint);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.or-divider::before,
+.or-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line, #e3e7ef);
+}
+
 .btn-ghost {
   font-family: var(--sans);
   font-size: 14px;

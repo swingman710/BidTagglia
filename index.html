@@ -33,10 +33,28 @@
         Sign in with Microsoft
       </button>
 
+      <div class="or-divider"><span>or</span></div>
+
+      <form id="login-form" autocomplete="off">
+        <div class="field">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" required />
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required />
+        </div>
+
+        <button type="submit" class="btn-primary" id="submit-btn">Sign in</button>
+      </form>
+
       <p class="login-foot" id="foot">Authorized users only · your organization account</p>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+    <script src="supabase.js"></script>
     <script src="auth.js"></script>
     <script src="app.js"></script>
   </body>
