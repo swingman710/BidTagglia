@@ -29,6 +29,7 @@ function loadOpps() {
 const COLUMN_MAP = {
   name: "name",
   bidDueDate: "bid_due_date",
+  bidDueTime: "bid_due_time",
   division: "division",
   internalBidNumber: "internal_bid_number",
   projectManager: "project_manager",
@@ -60,9 +61,9 @@ const COLUMN_MAP = {
   docsReceivedDate: "docs_received_date",
 };
 
-// Date columns can't accept "" — send null instead.
+// Date/time columns can't accept "" — send null instead.
 const DATE_FIELDS = new Set([
-  "bidDueDate", "estStartDate", "estEndDate", "docsReceivedDate",
+  "bidDueDate", "bidDueTime", "estStartDate", "estEndDate", "docsReceivedDate",
 ]);
 
 // Form object -> DB row (column-per-field).
@@ -142,17 +143,20 @@ function formatDate(value) {
   return d.toLocaleDateString();
 }
 
-// Date + time, for values that carry a time (e.g. "2026-06-11T14:30").
-// Falls back to date-only formatting for plain "YYYY-MM-DD" values.
-function formatDateTime(value) {
-  if (!value) return "—";
-  if (!String(value).includes("T")) return formatDate(value);
-  const d = new Date(value);
+// "14:30" / "14:30:00" -> "2:30 PM".
+function formatTime(value) {
+  if (!value) return "";
+  const d = new Date(`2000-01-01T${value}`);
   if (isNaN(d)) return value;
-  return d.toLocaleString([], {
-    year: "numeric", month: "numeric", day: "numeric",
-    hour: "numeric", minute: "2-digit",
-  });
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+// Combine the separate date + time fields for display.
+function formatDueDateTime(dateVal, timeVal) {
+  if (!dateVal && !timeVal) return "—";
+  return [dateVal ? formatDate(dateVal) : "", formatTime(timeVal)]
+    .filter(Boolean)
+    .join(" ");
 }
 
 // Whole days from today until the due date. Negative = past due.
@@ -272,7 +276,7 @@ function render() {
     divTd.textContent = opp.division || "—";
 
     const dueTd = document.createElement("td");
-    dueTd.textContent = formatDateTime(opp.bidDueDate);
+    dueTd.textContent = formatDueDateTime(opp.bidDueDate, opp.bidDueTime);
 
     const daysTd = document.createElement("td");
     const days = daysUntil(opp.bidDueDate);
@@ -679,6 +683,7 @@ oppForm.addEventListener("submit", (e) => {
   addOpp({
     name,
     bidDueDate: val("f-due-date"),
+    bidDueTime: val("f-due-time"),
     division: val("f-division"),
     internalBidNumber: val("f-internal-number"),
     projectManager: val("f-pm"),
