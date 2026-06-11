@@ -1,19 +1,16 @@
-// Bounce back to login if not signed in.
-const currentUser = sessionStorage.getItem("battag_user");
-if (!currentUser) {
-  window.location.href = "index.html";
-}
+// Require a Microsoft sign-in; bounce back to login if not signed in.
+(async () => {
+  const account = await BBAuth.requireAuth();
+  if (!account) return; // requireAuth is redirecting to index.html
 
-// Personalize the brand-header user chip.
-document.getElementById("user-name").textContent = currentUser || "user";
-document.getElementById("user-avatar").textContent = (currentUser || "?")
-  .charAt(0)
-  .toUpperCase();
+  // Personalize the brand-header user chip.
+  const name = account.name || account.username || "user";
+  document.getElementById("user-name").textContent = name;
+  document.getElementById("user-avatar").textContent = name.charAt(0).toUpperCase();
+})();
 
 document.getElementById("logout").addEventListener("click", () => {
-  sessionStorage.removeItem("battag_user");
-  sessionStorage.removeItem("battag_admin");
-  window.location.href = "index.html";
+  BBAuth.signOut();
 });
 
 // ---------- Opportunity storage (Supabase) ----------

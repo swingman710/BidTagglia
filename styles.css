@@ -140,6 +140,26 @@ textarea:focus {
   margin-top: 0;
 }
 
+.btn-primary.ms-signin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.btn-primary.ms-signin:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ms-signin .ms-logo {
+  display: block;
+  background: #fff;
+  padding: 2px;
+  border-radius: 2px;
+}
+
 .btn-ghost {
   font-family: var(--sans);
   font-size: 14px;
