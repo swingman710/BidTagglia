@@ -586,6 +586,19 @@ function buildMultiCombo(container, options) {
   renderChips();
 }
 
+// Quarter-hour suggestions for the bid-due-time field ("HH:MM", 24h). The
+// field is free-text, so any value can still be typed; this only limits the
+// datalist picker to :00/:15/:30/:45.
+const QUARTER_HOUR_TIMES = (() => {
+  const out = [];
+  for (let h = 0; h < 24; h++) {
+    for (const m of ["00", "15", "30", "45"]) {
+      out.push(`${String(h).padStart(2, "0")}:${m}`);
+    }
+  }
+  return out;
+})();
+
 function buildForm() {
   // Dropdowns
   fillSelect("f-division", FIELD_LISTS.division);
@@ -601,6 +614,7 @@ function buildForm() {
   fillDatalist("dl-pm", FIELD_LISTS.projectManager);
   fillDatalist("dl-lead-estimator", FIELD_LISTS.leadEstimator);
   fillDatalist("dl-industry", FIELD_LISTS.industry);
+  fillDatalist("dl-due-time", QUARTER_HOUR_TIMES);
 
   // Comboboxes that learn from previous entries
   for (const [key, id] of PREV_COMBOS) fillDatalist(id, distinctPrev(key));
