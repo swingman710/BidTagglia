@@ -586,18 +586,117 @@ function buildMultiCombo(container, options) {
   renderChips();
 }
 
-// Quarter-hour suggestions for the bid-due-time field ("HH:MM", 24h). The
-// field is free-text, so any value can still be typed; this only limits the
-// datalist picker to :00/:15/:30/:45.
-const QUARTER_HOUR_TIMES = (() => {
-  const out = [];
-  for (let h = 0; h < 24; h++) {
-    for (const m of ["00", "15", "30", "45"]) {
-      out.push(`${String(h).padStart(2, "0")}:${m}`);
-    }
+// Custom single-select time picker: a styled combobox with two columns —
+// hours on the left, quarter-hour minutes on the right. The text input is
+// free-form (any time can still be typed); clicking composes "HH:MM" (24h).
+// Creates the #f-due-time input that readForm() reads.
+function buildTimeCombo(container) {
+  container.innerHTML = "";
+
+  const control = document.createElement("div");
+  control.className = "mc-control";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.id = "f-due-time";
+  input.className = "mc-input";
+  input.placeholder = "Select or type…";
+  input.autocomplete = "off";
+  control.appendChild(input);
+
+  const panel = document.createElement("div");
+  panel.className = "mc-panel tc-panel";
+  panel.hidden = true;
+
+  container.append(control, panel);
+
+  let selH = null; // 0..23
+  let selM = "00"; // "00" | "15" | "30" | "45"
+
+  function parseInput() {
+    const m = input.value.trim().match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return;
+    const h = Number(m[1]);
+    if (h >= 0 && h <= 23) selH = h;
+    if (["00", "15", "30", "45"].includes(m[2])) selM = m[2];
   }
-  return out;
-})();
+
+  function compose() {
+    if (selH == null) return;
+    input.value = `${String(selH).padStart(2, "0")}:${selM}`;
+  }
+
+  function hourLabel(h) {
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12} ${h < 12 ? "AM" : "PM"}`;
+  }
+
+  function renderPanel() {
+    parseInput();
+    panel.innerHTML = "";
+    const cols = document.createElement("div");
+    cols.className = "tc-cols";
+
+    const hours = document.createElement("div");
+    hours.className = "tc-col tc-hours";
+    for (let h = 0; h < 24; h++) {
+      const row = document.createElement("div");
+      row.className = "tc-opt" + (selH === h ? " is-sel" : "");
+      row.textContent = hourLabel(h);
+      row.addEventListener("mousedown", (e) => {
+        e.preventDefault(); // keep focus; avoid blur-close race
+        selH = h;
+        compose();
+        renderPanel();
+        input.focus();
+      });
+      hours.appendChild(row);
+    }
+
+    const mins = document.createElement("div");
+    mins.className = "tc-col tc-mins";
+    for (const mm of ["00", "15", "30", "45"]) {
+      const row = document.createElement("div");
+      row.className = "tc-opt" + (selM === mm ? " is-sel" : "");
+      row.textContent = ":" + mm;
+      row.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        selM = mm;
+        if (selH == null) selH = 12; // default to noon if minute picked first
+        compose();
+        close();
+        input.blur();
+      });
+      mins.appendChild(row);
+    }
+
+    cols.append(hours, mins);
+    panel.appendChild(cols);
+  }
+
+  function open() {
+    panel.hidden = false;
+    renderPanel();
+  }
+  function close() {
+    panel.hidden = true;
+  }
+
+  control.addEventListener("click", () => {
+    input.focus();
+    open();
+  });
+  input.addEventListener("focus", open);
+  input.addEventListener("input", open);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      close();
+      input.blur();
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (!container.contains(e.target)) close();
+  });
+}
 
 function buildForm() {
   // Dropdowns
@@ -614,13 +713,15 @@ function buildForm() {
   fillDatalist("dl-pm", FIELD_LISTS.projectManager);
   fillDatalist("dl-lead-estimator", FIELD_LISTS.leadEstimator);
   fillDatalist("dl-industry", FIELD_LISTS.industry);
-  fillDatalist("dl-due-time", QUARTER_HOUR_TIMES);
 
   // Comboboxes that learn from previous entries
   for (const [key, id] of PREV_COMBOS) fillDatalist(id, distinctPrev(key));
 
   // Searchable multi-combobox (multi)
   buildMultiCombo(document.getElementById("mc-local-unions"), FIELD_LISTS.localUnions);
+
+  // Custom time picker (hours | quarter-hour minutes)
+  buildTimeCombo(document.getElementById("tc-due-time"));
 }
 
 // ---------- Modal ----------

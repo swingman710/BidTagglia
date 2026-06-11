@@ -1224,6 +1224,50 @@ table.bids td.col-status {
   color: var(--faint);
 }
 
+/* Custom time picker (hours | quarter-hour minutes) */
+.tc {
+  position: relative;
+}
+
+.tc-panel {
+  padding: 0;
+  right: auto; /* don't shrink to the narrow field; size to the columns */
+  min-width: 210px;
+}
+
+.tc-cols {
+  display: flex;
+}
+
+.tc-hours {
+  flex: 1;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.tc-mins {
+  flex: 0 0 64px;
+  border-left: 1px solid var(--border-2);
+}
+
+.tc-opt {
+  padding: 7px 11px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tc-opt:hover {
+  background: var(--band-2);
+}
+
+.tc-opt.is-sel {
+  background: var(--blue-soft);
+  color: var(--blue-dark);
+  font-weight: 600;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
