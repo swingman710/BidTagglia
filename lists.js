@@ -13,9 +13,7 @@ const ADMIN_LISTS = [
   "Local Unions",
   "Market Segment",
   "Industry",
-  "Bid Category",
   "Bid Type",
-  "Contract Type",
   "Delivery Method",
 ];
 

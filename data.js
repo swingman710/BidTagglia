@@ -55,19 +55,10 @@ const FIELD_LISTS = {
   ],
 
   // Dropdown
-  bidCategory: [
-    "Negotiated", "Competitive", "Budget", "Rebid",
-    "Request for Qualifications", "Request for Proposal", "Design Build",
-  ],
-
-  // Dropdown
   bidType: [
     "Budget", "GMP", "Hard Bid", "Lump Sum", "MSA", "Request for Proposal",
     "Request for Qualifications", "T&M", "Unit Pricing",
   ],
-
-  // Dropdown
-  contractType: ["Lump Sum", "GMP", "T&M", "Budget"],
 
   // Dropdown
   deliveryMethod: ["Plan and Spec", "Design Build", "Design Assist", "IPD"],

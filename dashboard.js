@@ -42,9 +42,7 @@ const COLUMN_MAP = {
   localUnions: "local_unions",
   marketSegment: "market_segment",
   industry: "industry",
-  bidCategory: "bid_category",
   bidType: "bid_type",
-  contractType: "contract_type",
   deliveryMethod: "delivery_method",
   flags: "flags",
   description: "description",
@@ -703,9 +701,7 @@ function buildForm() {
   // Dropdowns
   fillSelect("f-division", FIELD_LISTS.division);
   fillSelect("f-status", FIELD_LISTS.opportunityStatus);
-  fillSelect("f-bid-category", FIELD_LISTS.bidCategory);
   fillSelect("f-bid-type", FIELD_LISTS.bidType);
-  fillSelect("f-contract-type", FIELD_LISTS.contractType);
   fillSelect("f-delivery-method", FIELD_LISTS.deliveryMethod);
   fillSelect("f-market-segment", FIELD_LISTS.marketSegment);
   fillSelect("f-state", STATES);
@@ -814,9 +810,7 @@ oppForm.addEventListener("submit", (e) => {
 
     marketSegment: val("f-market-segment"),
     industry: val("f-industry"),
-    bidCategory: val("f-bid-category"),
     bidType: val("f-bid-type"),
-    contractType: val("f-contract-type"),
     deliveryMethod: val("f-delivery-method"),
 
     flags: checkedValues("cg-flags"),
