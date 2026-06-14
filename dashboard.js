@@ -143,12 +143,14 @@ function formatDate(value) {
   return d.toLocaleDateString();
 }
 
-// "14:30" / "14:30:00" -> "2:30 PM".
+// "2:30 PM" / "14:30:00" -> "14:30" (24-hour).
 function formatTime(value) {
   if (!value) return "";
   const d = new Date(`2000-01-01T${value}`);
   if (isNaN(d)) return value;
-  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return d.toLocaleTimeString([], {
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
 }
 
 // Combine the separate date + time fields for display.
@@ -626,8 +628,7 @@ function buildTimeCombo(container) {
   }
 
   function hourLabel(h) {
-    const h12 = h % 12 === 0 ? 12 : h % 12;
-    return `${h12} ${h < 12 ? "AM" : "PM"}`;
+    return String(h).padStart(2, "0");
   }
 
   function renderPanel() {
