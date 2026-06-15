@@ -9,7 +9,7 @@ const FIELD_LISTS = {
 
   // Dropdown
   opportunityStatus: [
-    "Opportunity", "Pending", "Bidding", "Budgeting", "Lost", "No Bid",
+    "Future Opportunity", "Pending", "Bidding", "Budgeting", "Lost", "No Bid",
     "On Hold (Bid)", "Won",
   ],
 
@@ -56,7 +56,7 @@ const FIELD_LISTS = {
 
   // Dropdown
   bidType: [
-    "Budget", "GMP", "Hard Bid", "Lump Sum", "MSA", "Request for Proposal",
+    "Budget", "GMP", "Hard Bid/Lump Sum", "MSA", "Request for Proposal",
     "Request for Qualifications", "T&M", "Unit Pricing",
   ],
 

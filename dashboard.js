@@ -52,6 +52,7 @@ const COLUMN_MAP = {
   state: "state",
   budgetedProjectValue: "budgeted_project_value",
   budgetedCost: "budgeted_cost",
+  finalPrice: "final_price",
   budgetedLaborHours: "budgeted_labor_hours",
   budgetedSquareFootage: "budgeted_square_footage",
   estStartDate: "est_start_date",
@@ -186,7 +187,7 @@ function statusClass(status) {
 
 // "Active" = still in play (excludes Won / Lost / No Bid).
 const ACTIVE_STATUSES = [
-  "Opportunity", "Pending", "Pursuing", "Budgeting", "On Hold (Bid)",
+  "Future Opportunity", "Pending", "Bidding", "Budgeting", "On Hold (Bid)",
 ];
 function isActive(o) {
   return ACTIVE_STATUSES.includes(o.status);
@@ -194,9 +195,9 @@ function isActive(o) {
 
 // Funnel segment colors per status.
 const STATUS_COLORS = {
-  "Opportunity": "#2563eb",
+  "Future Opportunity": "#2563eb",
   "Pending": "#0891b2",
-  "Pursuing": "#7c3aed",
+  "Bidding": "#7c3aed",
   "Budgeting": "#d97706",
   "On Hold (Bid)": "#64748b",
   "Won": "#16a34a",
@@ -823,6 +824,7 @@ oppForm.addEventListener("submit", (e) => {
 
     budgetedProjectValue: numOrNull("f-proj-value"),
     budgetedCost: numOrNull("f-cost"),
+    finalPrice: numOrNull("f-final-price"),
     budgetedLaborHours: numOrNull("f-labor-hours"),
     budgetedSquareFootage: numOrNull("f-sqft"),
     estStartDate: val("f-start-date"),
