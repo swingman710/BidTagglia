@@ -1211,6 +1211,11 @@ table.bids td.col-status {
   background: var(--band-2);
 }
 
+.mc-option.mc-add {
+  color: var(--blue-dark);
+  font-weight: 600;
+}
+
 .mc-option input {
   width: 15px;
   height: 15px;

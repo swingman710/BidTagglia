@@ -181,9 +181,8 @@
                 <datalist id="dl-owner"></datalist>
               </div>
               <div class="field">
-                <label for="f-cm">CM</label>
-                <input type="text" id="f-cm" list="dl-cm" placeholder="Select or add new…" />
-                <datalist id="dl-cm"></datalist>
+                <label>CM <span class="hint-inline">(select one or more)</span></label>
+                <div class="multicombo" id="mc-cm"></div>
               </div>
               <div class="field">
                 <label for="f-architect">Architect</label>
@@ -195,7 +194,11 @@
                 <input type="text" id="f-engineer" list="dl-engineer" placeholder="Select or add new…" />
                 <datalist id="dl-engineer"></datalist>
               </div>
-              <div class="field full">
+              <div class="field">
+                <label>GC <span class="hint-inline">(select one or more)</span></label>
+                <div class="multicombo" id="mc-gc"></div>
+              </div>
+              <div class="field">
                 <label>Local unions <span class="hint-inline">(search and select one or more)</span></label>
                 <div class="multicombo" id="mc-local-unions"></div>
               </div>
@@ -208,11 +211,12 @@
             <div class="section-grid">
               <div class="field">
                 <label for="f-market-segment">Market segment</label>
-                <select id="f-market-segment"></select>
+                <input type="text" id="f-market-segment" list="dl-market-segment" placeholder="Select or add new…" />
+                <datalist id="dl-market-segment"></datalist>
               </div>
               <div class="field">
                 <label for="f-industry">Industry</label>
-                <input type="text" id="f-industry" list="dl-industry" placeholder="Search or select…" />
+                <input type="text" id="f-industry" list="dl-industry" placeholder="Select or add new…" />
                 <datalist id="dl-industry"></datalist>
               </div>
               <div class="field">

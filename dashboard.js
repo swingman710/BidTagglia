@@ -37,6 +37,7 @@ const COLUMN_MAP = {
   leadEstimator: "lead_estimator",
   ownerCustomer: "owner_customer",
   cm: "cm",
+  gc: "gc",
   architect: "architect",
   engineer: "engineer",
   localUnions: "local_unions",
@@ -122,7 +123,6 @@ const STATES = [
 // [opp field key, datalist element id].
 const PREV_COMBOS = [
   ["ownerCustomer", "dl-owner"],
-  ["cm", "dl-cm"],
   ["architect", "dl-architect"],
   ["engineer", "dl-engineer"],
 ];
@@ -208,8 +208,12 @@ const STATUS_COLORS = {
 function distinctPrev(key) {
   const set = new Set();
   for (const o of loadOpps()) {
-    const v = (o[key] || "").trim();
-    if (v) set.add(v);
+    const v = o[key];
+    const items = Array.isArray(v) ? v : [v];
+    for (const item of items) {
+      const s = (item || "").trim();
+      if (s) set.add(s);
+    }
   }
   return [...set].sort((a, b) => a.localeCompare(b));
 }
@@ -587,6 +591,130 @@ function buildMultiCombo(container, options) {
   renderChips();
 }
 
+// Multi-select combobox with free entry: chips for chosen values, a text
+// field that filters suggestions (previous entries) and lets you add any new
+// value (click the "Add" row or press Enter). Selection on container._getSelected().
+function buildMultiEntry(container, suggestions) {
+  container.innerHTML = "";
+  const selected = new Set();
+  const opts = Array.isArray(suggestions) ? suggestions : [];
+
+  const control = document.createElement("div");
+  control.className = "mc-control";
+  const chips = document.createElement("span");
+  chips.className = "mc-chips";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "mc-input";
+  input.placeholder = "Select or add new…";
+  input.autocomplete = "off";
+  control.append(chips, input);
+
+  const panel = document.createElement("div");
+  panel.className = "mc-panel";
+  panel.hidden = true;
+
+  container.append(control, panel);
+
+  function renderChips() {
+    chips.innerHTML = "";
+    for (const v of selected) {
+      const chip = document.createElement("span");
+      chip.className = "mc-chip";
+      chip.textContent = v;
+      const x = document.createElement("button");
+      x.type = "button";
+      x.className = "mc-chip-x";
+      x.textContent = "✕";
+      x.addEventListener("click", (e) => {
+        e.stopPropagation();
+        selected.delete(v);
+        renderChips();
+        if (!panel.hidden) renderPanel();
+      });
+      chip.appendChild(x);
+      chips.appendChild(chip);
+    }
+  }
+
+  function add(value) {
+    const v = value.trim();
+    if (!v) return;
+    selected.add(v);
+    input.value = "";
+    renderChips();
+    renderPanel();
+    input.focus();
+  }
+
+  function renderPanel() {
+    const q = input.value.trim();
+    const ql = q.toLowerCase();
+    panel.innerHTML = "";
+
+    // "Add new" row when the typed value isn't already an option/selection.
+    const existing = new Set([...opts, ...selected].map((s) => s.toLowerCase()));
+    if (q && !existing.has(ql)) {
+      const addRow = document.createElement("div");
+      addRow.className = "mc-option mc-add";
+      addRow.textContent = `Add “${q}”`;
+      addRow.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        add(q);
+      });
+      panel.appendChild(addRow);
+    }
+
+    for (const o of opts) {
+      if (selected.has(o) || !o.toLowerCase().includes(ql)) continue;
+      const row = document.createElement("div");
+      row.className = "mc-option";
+      row.textContent = o;
+      row.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        add(o);
+      });
+      panel.appendChild(row);
+    }
+
+    if (!panel.children.length) {
+      const none = document.createElement("div");
+      none.className = "mc-none";
+      none.textContent = "Type to add…";
+      panel.appendChild(none);
+    }
+  }
+
+  function open() {
+    panel.hidden = false;
+    renderPanel();
+  }
+  function close() {
+    panel.hidden = true;
+  }
+
+  control.addEventListener("click", () => {
+    input.focus();
+    open();
+  });
+  input.addEventListener("input", open);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      add(input.value);
+    } else if (e.key === "Escape") {
+      close();
+      input.blur();
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (!container.contains(e.target)) close();
+  });
+
+  container._getSelected = () => [...selected];
+  renderChips();
+}
+
 // Custom single-select time picker: a styled combobox with two columns —
 // hours on the left, quarter-hour minutes on the right. The text input is
 // free-form (any time can still be typed); clicking composes "HH:MM" (24h).
@@ -716,19 +844,23 @@ function buildForm() {
   fillSelect("f-status", FIELD_LISTS.opportunityStatus);
   fillSelect("f-bid-type", FIELD_LISTS.bidType);
   fillSelect("f-delivery-method", FIELD_LISTS.deliveryMethod);
-  fillSelect("f-market-segment", FIELD_LISTS.marketSegment);
   fillSelect("f-state", STATES);
 
-  // Searchable comboboxes (single)
+  // Searchable comboboxes (single, select-or-add-new)
   fillDatalist("dl-pm", FIELD_LISTS.projectManager);
   fillDatalist("dl-lead-estimator", FIELD_LISTS.leadEstimator);
   fillDatalist("dl-industry", FIELD_LISTS.industry);
+  fillDatalist("dl-market-segment", FIELD_LISTS.marketSegment);
 
   // Comboboxes that learn from previous entries
   for (const [key, id] of PREV_COMBOS) fillDatalist(id, distinctPrev(key));
 
   // Searchable multi-combobox (multi)
   buildMultiCombo(document.getElementById("mc-local-unions"), FIELD_LISTS.localUnions);
+
+  // Multi-select free-entry comboboxes (chips + add new)
+  buildMultiEntry(document.getElementById("mc-cm"), distinctPrev("cm"));
+  buildMultiEntry(document.getElementById("mc-gc"), distinctPrev("gc"));
 
   // Custom time picker (hours | quarter-hour minutes)
   buildTimeCombo(document.getElementById("tc-due-time"));
@@ -827,7 +959,8 @@ oppForm.addEventListener("submit", (e) => {
     leadEstimator: val("f-lead-estimator"),
 
     ownerCustomer: val("f-owner"),
-    cm: val("f-cm"),
+    cm: document.getElementById("mc-cm")._getSelected(),
+    gc: document.getElementById("mc-gc")._getSelected(),
     architect: val("f-architect"),
     engineer: val("f-engineer"),
     localUnions: document.getElementById("mc-local-unions")._getSelected(),
