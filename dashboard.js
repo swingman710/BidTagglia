@@ -698,6 +698,18 @@ function buildTimeCombo(container) {
   });
 }
 
+// Statuses that require a reason written in the Description field.
+const REASON_REQUIRED_STATUSES = ["No Bid", "Cancelled"];
+
+function reasonRequired() {
+  return REASON_REQUIRED_STATUSES.includes(val("f-status"));
+}
+
+// Show/hide the red "reason required" note under Description based on status.
+function updateReasonMsg() {
+  document.getElementById("reason-msg").hidden = !reasonRequired();
+}
+
 function buildForm() {
   // Dropdowns
   fillSelect("f-division", FIELD_LISTS.division);
@@ -720,7 +732,11 @@ function buildForm() {
 
   // Custom time picker (hours | quarter-hour minutes)
   buildTimeCombo(document.getElementById("tc-due-time"));
+
+  updateReasonMsg();
 }
+
+document.getElementById("f-status").addEventListener("change", updateReasonMsg);
 
 // ---------- Modal ----------
 
@@ -790,6 +806,13 @@ oppForm.addEventListener("submit", (e) => {
   const name = val("f-name");
   if (!name) {
     document.getElementById("f-name").focus();
+    return;
+  }
+
+  // No Bid / Cancelled require a reason in the description.
+  if (reasonRequired() && !val("f-description")) {
+    updateReasonMsg();
+    document.getElementById("f-description").focus();
     return;
   }
 

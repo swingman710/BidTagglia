@@ -10,7 +10,7 @@ const FIELD_LISTS = {
   // Dropdown
   opportunityStatus: [
     "Future Opportunity", "Pending", "Bidding", "Budgeting", "Lost", "No Bid",
-    "On Hold (Bid)", "Won",
+    "On Hold (Bid)", "Won", "Cancelled",
   ],
 
   // Searchable combobox (single)
