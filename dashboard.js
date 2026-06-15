@@ -249,7 +249,7 @@ function render() {
   const query = search.value.trim().toLowerCase();
   const visible = query
     ? opps.filter((o) =>
-        [o.name, o.division, o.projectManager, o.ownerCustomer].some((f) =>
+        [o.name, o.division, o.leadEstimator, o.ownerCustomer].some((f) =>
           (f || "").toLowerCase().includes(query)
         )
       )
@@ -294,7 +294,7 @@ function render() {
 
     const pmTd = document.createElement("td");
     pmTd.className = "col-pm";
-    pmTd.textContent = opp.projectManager || "—";
+    pmTd.textContent = opp.leadEstimator || "—";
 
     const statusTd = document.createElement("td");
     statusTd.className = "col-status";
