@@ -56,7 +56,7 @@ const FIELD_LISTS = {
 
   // Dropdown
   bidType: [
-    "Budget", "GMP", "Hard Bid/Lump Sum", "MSA", "Request for Proposal",
+    "Budget", "GMP", "Hard Bid/Lump Sum", "MSA",
     "Request for Qualifications", "T&M", "Unit Pricing",
   ],
 
