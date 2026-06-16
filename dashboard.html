@@ -341,10 +341,18 @@
           <h2 id="detail-title">Opportunity</h2>
           <button class="modal-close" id="detail-close" title="Close">✕</button>
         </div>
-        <div id="detail-body" class="detail-body"></div>
+        <div class="detail-tabs" id="detail-tabs">
+          <button type="button" class="detail-tab is-active" data-tab="opportunity">Opportunity</button>
+          <button type="button" class="detail-tab" data-tab="pricing">Pricing</button>
+          <button type="button" class="detail-tab" data-tab="team">Project Team</button>
+        </div>
+        <div class="detail-body">
+          <div class="tab-pane" id="pane-opportunity"></div>
+          <div class="tab-pane" id="pane-pricing" hidden></div>
+          <div class="tab-pane" id="pane-team" hidden></div>
+        </div>
         <div class="modal-actions">
           <button type="button" class="btn-ghost" id="detail-cancel">Close</button>
-          <button type="button" class="btn-primary" id="detail-edit">Edit</button>
         </div>
       </div>
     </div>

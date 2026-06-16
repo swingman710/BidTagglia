@@ -1022,10 +1022,26 @@ function detailSections(o) {
   ];
 }
 
+// ----- Opportunity tab (read-only fields + Edit) -----
+
 function renderDetail(o) {
   document.getElementById("detail-title").textContent = o.name || "Opportunity";
-  const body = document.getElementById("detail-body");
-  body.innerHTML = "";
+  const pane = document.getElementById("pane-opportunity");
+  pane.innerHTML = "";
+
+  const bar = document.createElement("div");
+  bar.className = "pane-actions";
+  const editBtn = document.createElement("button");
+  editBtn.type = "button";
+  editBtn.className = "btn-primary inline";
+  editBtn.textContent = "Edit";
+  editBtn.addEventListener("click", () => {
+    const opp = detailOpp;
+    closeDetail();
+    openModal(opp);
+  });
+  bar.appendChild(editBtn);
+  pane.appendChild(bar);
 
   for (const [title, fields] of detailSections(o)) {
     const sec = document.createElement("section");
@@ -1049,13 +1065,33 @@ function renderDetail(o) {
       grid.appendChild(cell);
     }
     sec.appendChild(grid);
-    body.appendChild(sec);
+    pane.appendChild(sec);
   }
 }
+
+// ----- Tabs -----
+
+function switchTab(name) {
+  for (const tab of document.querySelectorAll("#detail-tabs .detail-tab")) {
+    tab.classList.toggle("is-active", tab.dataset.tab === name);
+  }
+  for (const id of ["opportunity", "pricing", "team"]) {
+    document.getElementById(`pane-${id}`).hidden = id !== name;
+  }
+  document.getElementById("detail-body").dataset.tab = name;
+  if (name === "pricing") renderPricing();
+  else if (name === "team") renderTeam();
+}
+
+document.getElementById("detail-tabs").addEventListener("click", (e) => {
+  const tab = e.target.closest(".detail-tab");
+  if (tab) switchTab(tab.dataset.tab);
+});
 
 function openDetail(opp) {
   detailOpp = opp;
   renderDetail(opp);
+  switchTab("opportunity");
   detailModal.hidden = false;
 }
 
@@ -1066,11 +1102,6 @@ function closeDetail() {
 
 document.getElementById("detail-close").addEventListener("click", closeDetail);
 document.getElementById("detail-cancel").addEventListener("click", closeDetail);
-document.getElementById("detail-edit").addEventListener("click", () => {
-  const opp = detailOpp;
-  closeDetail();
-  openModal(opp);
-});
 detailModal.addEventListener("click", (e) => {
   if (e.target === detailModal) closeDetail();
 });
@@ -1080,6 +1111,332 @@ document.addEventListener("keydown", (e) => {
   if (!detailModal.hidden) closeDetail();
   else if (!modal.hidden) closeModal();
 });
+
+// ---------- Pricing tab ----------
+
+const PRICING_TABLE = "pricing_quotes";
+const MEMBERS_TABLE = "project_members";
+
+async function fetchPricing(oppId) {
+  const { data, error } = await sb
+    .from(PRICING_TABLE)
+    .select("*")
+    .eq("opportunity_id", String(oppId))
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("Pricing load error:", error.message);
+    return [];
+  }
+  return data || [];
+}
+
+async function addPricing(row) {
+  const { error } = await sb.from(PRICING_TABLE).insert(row);
+  if (error) alert("Could not save price: " + error.message);
+}
+
+async function updatePricingStatus(id, status) {
+  const { error } = await sb.from(PRICING_TABLE).update({ status }).eq("id", id);
+  if (error) {
+    alert("Could not update status: " + error.message);
+    return;
+  }
+  renderPricing();
+}
+
+async function deletePricing(id) {
+  if (!confirm("Delete this price quote?")) return;
+  const { error } = await sb.from(PRICING_TABLE).delete().eq("id", id);
+  if (error) {
+    alert("Could not delete price: " + error.message);
+    return;
+  }
+  renderPricing();
+}
+
+const QUOTE_STATUSES = ["Draft", "Sent", "Lost", "Withdrawn"];
+
+function renderQuoteRow(q) {
+  const tr = document.createElement("tr");
+
+  const company = document.createElement("td");
+  company.className = "quote-company";
+  company.textContent = q.company || "—";
+
+  const type = document.createElement("td");
+  type.textContent = q.type === "budgetary" ? "Budgetary" : "Proposal";
+
+  const price = document.createElement("td");
+  price.className = "num";
+  price.textContent = fmtMoney(q.price);
+
+  const sent = document.createElement("td");
+  sent.textContent = q.price_sent_on ? formatDate(q.price_sent_on) : "—";
+
+  const statusTd = document.createElement("td");
+  const bar = document.createElement("div");
+  bar.className = "statusbar";
+
+  // Top: Lost / Withdrawn / Delete
+  const actions = document.createElement("div");
+  actions.className = "status-actions";
+  for (const s of ["Lost", "Withdrawn"]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "status-btn" + (q.status === s ? " is-active" : "");
+    b.textContent = s;
+    b.addEventListener("click", () => updatePricingStatus(q.id, s));
+    actions.appendChild(b);
+  }
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "status-btn danger";
+  del.textContent = "Delete";
+  del.addEventListener("click", () => deletePricing(q.id));
+  actions.appendChild(del);
+
+  // Bottom: Draft -> Sent chevrons
+  const steps = document.createElement("div");
+  steps.className = "status-steps";
+  for (const s of ["Draft", "Sent"]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chev" + (q.status === s ? " is-active" : "");
+    b.textContent = s;
+    b.addEventListener("click", () => updatePricingStatus(q.id, s));
+    steps.appendChild(b);
+  }
+
+  bar.append(actions, steps);
+  statusTd.appendChild(bar);
+
+  tr.append(company, type, price, sent, statusTd);
+  if (q.notes) tr.title = q.notes;
+  return tr;
+}
+
+function renderQuoteGroup(label, quotes) {
+  const det = document.createElement("details");
+  det.className = "quote-group";
+  det.open = true;
+
+  const sum = document.createElement("summary");
+  sum.innerHTML = `<strong>${label}</strong> <span class="quote-count">(${quotes.length})</span>`;
+  det.appendChild(sum);
+
+  if (!quotes.length) {
+    const none = document.createElement("div");
+    none.className = "quote-none";
+    none.textContent = "No prices yet.";
+    det.appendChild(none);
+    return det;
+  }
+
+  const table = document.createElement("table");
+  table.className = "quote-table";
+  const thead = document.createElement("thead");
+  thead.innerHTML =
+    "<tr><th>Company Name</th><th>Type of Price</th>" +
+    "<th class='num'>Price</th><th>Price Sent On</th><th>Status</th></tr>";
+  const tb = document.createElement("tbody");
+  for (const q of quotes) tb.appendChild(renderQuoteRow(q));
+  table.append(thead, tb);
+  det.appendChild(table);
+  return det;
+}
+
+function showQuoteForm(type, mount) {
+  const labelText = type === "proposal" ? "Proposal" : "Budgetary";
+  mount.innerHTML = "";
+  const card = document.createElement("div");
+  card.className = "quote-form";
+  card.innerHTML = `
+    <h4>Add ${labelText} Price</h4>
+    <div class="quote-grid">
+      <label>Company<input type="text" data-f="company" /></label>
+      <label>Price<input type="number" min="0" step="0.01" data-f="price" /></label>
+      <label>Price sent on<input type="date" data-f="price_sent_on" /></label>
+      <label class="full">Notes<textarea rows="3" data-f="notes"></textarea></label>
+    </div>
+    <div class="quote-form-actions">
+      <button type="button" class="btn-ghost" data-act="cancel">Cancel</button>
+      <button type="button" class="btn-primary" data-act="save">Save price</button>
+    </div>`;
+  mount.appendChild(card);
+
+  const field = (f) => card.querySelector(`[data-f="${f}"]`);
+  card.querySelector('[data-act="cancel"]').addEventListener("click", () => {
+    mount.innerHTML = "";
+  });
+  card.querySelector('[data-act="save"]').addEventListener("click", async () => {
+    const company = field("company").value.trim();
+    if (!company) {
+      field("company").focus();
+      return;
+    }
+    const priceRaw = field("price").value;
+    await addPricing({
+      opportunity_id: String(detailOpp.id),
+      type,
+      company,
+      price: priceRaw === "" ? null : Number(priceRaw),
+      price_sent_on: field("price_sent_on").value || null,
+      notes: field("notes").value.trim() || null,
+      status: "Draft",
+    });
+    mount.innerHTML = "";
+    renderPricing();
+  });
+  field("company").focus();
+}
+
+async function renderPricing() {
+  const pane = document.getElementById("pane-pricing");
+  pane.innerHTML = "";
+  if (!detailOpp) return;
+
+  const bar = document.createElement("div");
+  bar.className = "price-actions";
+  const propBtn = document.createElement("button");
+  propBtn.type = "button";
+  propBtn.className = "price-btn";
+  propBtn.textContent = "Add Proposal Price";
+  const budBtn = document.createElement("button");
+  budBtn.type = "button";
+  budBtn.className = "price-btn";
+  budBtn.textContent = "Add Budgetary Price";
+  bar.append(propBtn, budBtn);
+  pane.appendChild(bar);
+
+  const mount = document.createElement("div");
+  pane.appendChild(mount);
+  propBtn.addEventListener("click", () => showQuoteForm("proposal", mount));
+  budBtn.addEventListener("click", () => showQuoteForm("budgetary", mount));
+
+  const heading = document.createElement("div");
+  heading.className = "pricing-report-label";
+  heading.textContent = "Pricing Report";
+  pane.appendChild(heading);
+
+  const groups = document.createElement("div");
+  pane.appendChild(groups);
+
+  const quotes = await fetchPricing(detailOpp.id);
+  groups.appendChild(
+    renderQuoteGroup("Proposal", quotes.filter((q) => q.type === "proposal"))
+  );
+  groups.appendChild(
+    renderQuoteGroup("Budgetary", quotes.filter((q) => q.type === "budgetary"))
+  );
+}
+
+// ---------- Project Team tab ----------
+
+const TEAM_ROLES = ["Estimator", "Sponsor", "Lead Estimator", "Project Manager"];
+
+async function fetchMembers(oppId) {
+  const { data, error } = await sb
+    .from(MEMBERS_TABLE)
+    .select("*")
+    .eq("opportunity_id", String(oppId))
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("Members load error:", error.message);
+    return [];
+  }
+  return data || [];
+}
+
+async function addMember(row) {
+  const { error } = await sb.from(MEMBERS_TABLE).insert(row);
+  if (error) alert("Could not add member: " + error.message);
+}
+
+async function deleteMember(id) {
+  const { error } = await sb.from(MEMBERS_TABLE).delete().eq("id", id);
+  if (error) {
+    alert("Could not remove member: " + error.message);
+    return;
+  }
+  renderTeam();
+}
+
+function renderMemberRow(m) {
+  const row = document.createElement("div");
+  row.className = "team-row";
+
+  const name = document.createElement("span");
+  name.className = "team-name";
+  name.textContent = m.name;
+
+  const role = document.createElement("span");
+  role.className = "team-role";
+  role.textContent = m.role || "—";
+
+  const x = document.createElement("button");
+  x.type = "button";
+  x.className = "x";
+  x.title = "Remove member";
+  x.textContent = "✕";
+  x.addEventListener("click", () => deleteMember(m.id));
+
+  row.append(name, role, x);
+  return row;
+}
+
+async function renderTeam() {
+  const pane = document.getElementById("pane-team");
+  pane.innerHTML = "";
+  if (!detailOpp) return;
+
+  const form = document.createElement("div");
+  form.className = "team-add";
+  form.innerHTML = `
+    <div class="field">
+      <label for="tm-name">Member</label>
+      <input type="text" id="tm-name" list="dl-members" placeholder="Search or add…" autocomplete="off" />
+      <datalist id="dl-members"></datalist>
+    </div>
+    <div class="field">
+      <label for="tm-role">Role</label>
+      <select id="tm-role"></select>
+    </div>
+    <button type="button" class="btn-primary inline" id="tm-add">Add member</button>`;
+  pane.appendChild(form);
+
+  const sel = form.querySelector("#tm-role");
+  sel.appendChild(new Option("Select role…", ""));
+  for (const r of TEAM_ROLES) sel.appendChild(new Option(r, r));
+
+  const nameInput = form.querySelector("#tm-name");
+  form.querySelector("#tm-add").addEventListener("click", async () => {
+    const name = nameInput.value.trim();
+    if (!name) {
+      nameInput.focus();
+      return;
+    }
+    await addMember({
+      opportunity_id: String(detailOpp.id),
+      name,
+      role: sel.value || null,
+    });
+    renderTeam();
+  });
+
+  const list = document.createElement("div");
+  list.className = "team-list";
+  pane.appendChild(list);
+
+  const members = await fetchMembers(detailOpp.id);
+  if (!members.length) {
+    const none = document.createElement("div");
+    none.className = "quote-none";
+    none.textContent = "No team members yet.";
+    list.appendChild(none);
+  } else {
+    for (const m of members) list.appendChild(renderMemberRow(m));
+  }
+}
 
 // ---------- Reading the form ----------
 

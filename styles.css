@@ -1441,6 +1441,319 @@ table.bids tbody tr.bid-row {
   word-break: break-word;
 }
 
+.pane-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+
+/* ----- Detail tabs (one color each) ----- */
+.detail-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
+}
+
+.detail-tab {
+  padding: 9px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.detail-tab:hover {
+  color: var(--ink);
+}
+
+.detail-tab[data-tab="opportunity"].is-active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+.detail-tab[data-tab="pricing"].is-active {
+  color: #c98a00;
+  border-bottom-color: #e0a106;
+}
+.detail-tab[data-tab="team"].is-active {
+  color: #15803d;
+  border-bottom-color: #16a34a;
+}
+
+/* Tab-colored primary buttons within each pane */
+#pane-pricing .btn-primary {
+  background: #e0a106;
+  border-color: #e0a106;
+}
+#pane-team .btn-primary {
+  background: #16a34a;
+  border-color: #16a34a;
+}
+
+/* ----- Pricing tab ----- */
+.price-actions {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.price-btn {
+  flex: 1;
+  padding: 11px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 22px;
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.price-btn:hover {
+  border-color: #e0a106;
+  color: #c98a00;
+}
+
+.pricing-report-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 6px 0 10px;
+}
+
+.quote-form {
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  background: var(--band-2);
+}
+
+.quote-form h4 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.quote-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.quote-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.quote-grid label.full {
+  grid-column: 1 / -1;
+}
+
+.quote-grid input,
+.quote-grid textarea {
+  font-family: var(--sans);
+  font-size: 13px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  background: var(--surface);
+}
+
+.quote-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.quote-group {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.quote-group > summary {
+  padding: 9px 12px;
+  background: var(--band-2);
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.quote-count {
+  color: var(--faint);
+  font-weight: 500;
+}
+
+.quote-none {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.quote-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.quote-table th {
+  text-align: left;
+  padding: 8px 10px;
+  background: #565b66;
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.quote-table th.num,
+.quote-table td.num {
+  text-align: right;
+}
+
+.quote-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.quote-company {
+  color: var(--blue-dark);
+  font-weight: 600;
+}
+
+/* Per-quote status workflow */
+.statusbar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 230px;
+}
+
+.status-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.status-btn {
+  padding: 3px 10px;
+  border: none;
+  border-radius: 3px;
+  background: #6b7280;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.status-btn:hover {
+  background: #565b66;
+}
+
+.status-btn.is-active {
+  background: var(--red);
+}
+
+.status-btn.danger:hover {
+  background: var(--red);
+}
+
+.status-steps {
+  display: flex;
+}
+
+.chev {
+  flex: 1;
+  padding: 6px 10px;
+  border: none;
+  background: #6b7280;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%);
+  margin-right: -8px;
+  padding-left: 18px;
+}
+
+.chev:first-child {
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
+  padding-left: 12px;
+}
+
+.chev.is-active {
+  background: #e0a106;
+}
+
+/* ----- Project Team tab ----- */
+.team-add {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.team-add .field {
+  flex: 1;
+  margin: 0;
+}
+
+.team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.team-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.team-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.team-role {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: #15803d;
+  background: #e7f6ec;
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.team-row .x {
+  border: none;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.team-row .x:hover {
+  color: var(--red);
+}
+
 @media (max-width: 600px) {
   .section-grid {
     grid-template-columns: 1fr;
