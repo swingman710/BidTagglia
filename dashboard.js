@@ -312,6 +312,8 @@ function render() {
     }
 
     tr.append(nameTd, divTd, dueTd, daysTd, valueTd, pmTd, statusTd);
+    tr.className = "bid-row";
+    tr.addEventListener("click", () => openDetail(opp));
     rows.appendChild(tr);
   }
 }
@@ -494,9 +496,9 @@ function fillCheckgroup(id, options) {
 // Searchable multi-select combobox: a text field that filters a dropdown of
 // checkbox options; checking adds it as a chip. Stores the selection on the
 // container so readForm() can pull it via container._getSelected().
-function buildMultiCombo(container, options) {
+function buildMultiCombo(container, options, preselected) {
   container.innerHTML = "";
-  const selected = new Set();
+  const selected = new Set(Array.isArray(preselected) ? preselected : []);
 
   const control = document.createElement("div");
   control.className = "mc-control";
@@ -594,9 +596,9 @@ function buildMultiCombo(container, options) {
 // Multi-select combobox with free entry: chips for chosen values, a text
 // field that filters suggestions (previous entries) and lets you add any new
 // value (click the "Add" row or press Enter). Selection on container._getSelected().
-function buildMultiEntry(container, suggestions) {
+function buildMultiEntry(container, suggestions, preselected) {
   container.innerHTML = "";
-  const selected = new Set();
+  const selected = new Set(Array.isArray(preselected) ? preselected : []);
   const opts = Array.isArray(suggestions) ? suggestions : [];
 
   const control = document.createElement("div");
@@ -838,7 +840,7 @@ function updateReasonMsg() {
   document.getElementById("reason-msg").hidden = !reasonRequired();
 }
 
-function buildForm() {
+function buildForm(opp) {
   // Dropdowns
   fillSelect("f-division", FIELD_LISTS.division);
   fillSelect("f-status", FIELD_LISTS.opportunityStatus);
@@ -855,12 +857,16 @@ function buildForm() {
   // Comboboxes that learn from previous entries
   for (const [key, id] of PREV_COMBOS) fillDatalist(id, distinctPrev(key));
 
-  // Searchable multi-combobox (multi)
-  buildMultiCombo(document.getElementById("mc-local-unions"), FIELD_LISTS.localUnions);
+  // Searchable multi-combobox (multi) — seeded from the opp when editing
+  buildMultiCombo(
+    document.getElementById("mc-local-unions"),
+    FIELD_LISTS.localUnions,
+    opp && opp.localUnions
+  );
 
   // Multi-select free-entry comboboxes (chips + add new)
-  buildMultiEntry(document.getElementById("mc-cm"), distinctPrev("cm"));
-  buildMultiEntry(document.getElementById("mc-gc"), distinctPrev("gc"));
+  buildMultiEntry(document.getElementById("mc-cm"), distinctPrev("cm"), opp && opp.cm);
+  buildMultiEntry(document.getElementById("mc-gc"), distinctPrev("gc"), opp && opp.gc);
 
   // Custom time picker (hours | quarter-hour minutes)
   buildTimeCombo(document.getElementById("tc-due-time"));
@@ -872,9 +878,68 @@ document.getElementById("f-status").addEventListener("change", updateReasonMsg);
 
 // ---------- Modal ----------
 
-function openModal() {
+// The opportunity currently being edited (null = creating a new one).
+let editingId = null;
+
+// Simple inputs/selects/datalists keyed by element id -> opp field.
+const SIMPLE_FIELDS = {
+  "f-name": "name",
+  "f-due-date": "bidDueDate",
+  "f-due-time": "bidDueTime",
+  "f-division": "division",
+  "f-internal-number": "internalBidNumber",
+  "f-pm": "projectManager",
+  "f-status": "status",
+  "f-lead-estimator": "leadEstimator",
+  "f-owner": "ownerCustomer",
+  "f-architect": "architect",
+  "f-engineer": "engineer",
+  "f-market-segment": "marketSegment",
+  "f-industry": "industry",
+  "f-bid-type": "bidType",
+  "f-delivery-method": "deliveryMethod",
+  "f-description": "description",
+  "f-address": "projectAddress",
+  "f-city": "city",
+  "f-zip": "zipCode",
+  "f-state": "state",
+  "f-proj-value": "budgetedProjectValue",
+  "f-cost": "budgetedCost",
+  "f-final-price": "finalPrice",
+  "f-labor-hours": "budgetedLaborHours",
+  "f-sqft": "budgetedSquareFootage",
+  "f-start-date": "estStartDate",
+  "f-end-date": "estEndDate",
+  "f-docs-date": "docsReceivedDate",
+};
+
+// Fill the form fields from an existing opportunity (combos/time are seeded by
+// buildForm; this handles the simple inputs and the requirement checkboxes).
+function populateForm(opp) {
+  for (const [id, key] of Object.entries(SIMPLE_FIELDS)) {
+    const v = opp[key];
+    document.getElementById(id).value = v == null ? "" : v;
+  }
+  const flags = Array.isArray(opp.flags) ? opp.flags : [];
+  for (const cb of document.querySelectorAll("#cg-flags input")) {
+    cb.checked = flags.includes(cb.value);
+  }
+  updateReasonMsg();
+}
+
+function openModal(opp) {
   oppForm.reset();
-  buildForm();
+  editingId = opp && opp.id != null ? opp.id : null;
+  buildForm(opp);
+  if (opp) populateForm(opp);
+
+  document.getElementById("modal-title").textContent = editingId
+    ? "Edit Opportunity"
+    : "New Opportunity";
+  document.getElementById("modal-submit").textContent = editingId
+    ? "Update opportunity"
+    : "Save opportunity";
+
   modal.hidden = false;
   document.getElementById("f-name").focus();
 }
@@ -883,14 +948,137 @@ function closeModal() {
   modal.hidden = true;
 }
 
-document.getElementById("new-opp").addEventListener("click", openModal);
+document.getElementById("new-opp").addEventListener("click", () => openModal());
 document.getElementById("modal-close").addEventListener("click", closeModal);
 document.getElementById("modal-cancel").addEventListener("click", closeModal);
 modal.addEventListener("click", (e) => {
   if (e.target === modal) closeModal();
 });
+
+// ---------- Detail view ----------
+
+const detailModal = document.getElementById("detail-modal");
+let detailOpp = null;
+
+function fmtMoney(v) {
+  return v == null || v === "" ? "—" : currency.format(Number(v) || 0);
+}
+function fmtNum(v) {
+  return v == null || v === "" ? "—" : Number(v).toLocaleString();
+}
+function fmtList(v) {
+  return Array.isArray(v) && v.length ? v.join(", ") : "—";
+}
+function fmtText(v) {
+  return v == null || String(v).trim() === "" ? "—" : String(v);
+}
+
+// Detail layout: sections of [label, value] rows derived from the opp.
+function detailSections(o) {
+  return [
+    ["General", [
+      ["Opportunity name", fmtText(o.name)],
+      ["Bid due", formatDueDateTime(o.bidDueDate, o.bidDueTime)],
+      ["Division", fmtText(o.division)],
+      ["Project manager", fmtText(o.projectManager)],
+      ["Lead estimator", fmtText(o.leadEstimator)],
+      ["Opportunity status", fmtText(o.status)],
+      ["Internal bid number", fmtText(o.internalBidNumber)],
+    ]],
+    ["Project Team", [
+      ["Owner / customer", fmtText(o.ownerCustomer)],
+      ["CM", fmtList(o.cm)],
+      ["GC", fmtList(o.gc)],
+      ["Architect", fmtText(o.architect)],
+      ["Engineer", fmtText(o.engineer)],
+      ["Local unions", fmtList(o.localUnions)],
+    ]],
+    ["Classification", [
+      ["Market segment", fmtText(o.marketSegment)],
+      ["Industry", fmtText(o.industry)],
+      ["Bid type", fmtText(o.bidType)],
+      ["Delivery method", fmtText(o.deliveryMethod)],
+    ]],
+    ["Requirements", [
+      ["Requirements", fmtList(o.flags)],
+      ["Description", fmtText(o.description)],
+    ]],
+    ["Location", [
+      ["Project address", fmtText(o.projectAddress)],
+      ["City", fmtText(o.city)],
+      ["Zip code", fmtText(o.zipCode)],
+      ["State", fmtText(o.state)],
+    ]],
+    ["Budget & Schedule", [
+      ["Budgeted project value", fmtMoney(o.budgetedProjectValue)],
+      ["Budgeted cost", fmtMoney(o.budgetedCost)],
+      ["Final price", fmtMoney(o.finalPrice)],
+      ["Estimated labor hours", fmtNum(o.budgetedLaborHours)],
+      ["Estimated square footage", fmtNum(o.budgetedSquareFootage)],
+      ["Estimated project start", formatDate(o.estStartDate)],
+      ["Estimated project end", formatDate(o.estEndDate)],
+      ["Documents received", formatDate(o.docsReceivedDate)],
+    ]],
+  ];
+}
+
+function renderDetail(o) {
+  document.getElementById("detail-title").textContent = o.name || "Opportunity";
+  const body = document.getElementById("detail-body");
+  body.innerHTML = "";
+
+  for (const [title, fields] of detailSections(o)) {
+    const sec = document.createElement("section");
+    sec.className = "detail-section";
+    const h = document.createElement("h3");
+    h.textContent = title;
+    sec.appendChild(h);
+
+    const grid = document.createElement("div");
+    grid.className = "detail-grid";
+    for (const [label, value] of fields) {
+      const cell = document.createElement("div");
+      cell.className = "detail-cell";
+      const l = document.createElement("div");
+      l.className = "detail-label";
+      l.textContent = label;
+      const v = document.createElement("div");
+      v.className = "detail-value";
+      v.textContent = value;
+      cell.append(l, v);
+      grid.appendChild(cell);
+    }
+    sec.appendChild(grid);
+    body.appendChild(sec);
+  }
+}
+
+function openDetail(opp) {
+  detailOpp = opp;
+  renderDetail(opp);
+  detailModal.hidden = false;
+}
+
+function closeDetail() {
+  detailModal.hidden = true;
+  detailOpp = null;
+}
+
+document.getElementById("detail-close").addEventListener("click", closeDetail);
+document.getElementById("detail-cancel").addEventListener("click", closeDetail);
+document.getElementById("detail-edit").addEventListener("click", () => {
+  const opp = detailOpp;
+  closeDetail();
+  openModal(opp);
+});
+detailModal.addEventListener("click", (e) => {
+  if (e.target === detailModal) closeDetail();
+});
+
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !modal.hidden) closeModal();
+  if (e.key !== "Escape") return;
+  if (!detailModal.hidden) closeDetail();
+  else if (!modal.hidden) closeModal();
 });
 
 // ---------- Reading the form ----------
@@ -923,6 +1111,15 @@ async function addOpp(opp) {
   await refreshOpps();
 }
 
+async function updateOpp(id, opp) {
+  const { error } = await sb.from(SUPABASE_TABLE).update(toRow(opp)).eq("id", id);
+  if (error) {
+    alert("Could not update opportunity: " + error.message);
+    return;
+  }
+  await refreshOpps();
+}
+
 async function deleteOpp(id) {
   const { error } = await sb.from(SUPABASE_TABLE).delete().eq("id", id);
   if (error) {
@@ -932,24 +1129,9 @@ async function deleteOpp(id) {
   await refreshOpps();
 }
 
-oppForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-
-  const name = val("f-name");
-  if (!name) {
-    document.getElementById("f-name").focus();
-    return;
-  }
-
-  // No Bid / Cancelled require a reason in the description.
-  if (reasonRequired() && !val("f-description")) {
-    updateReasonMsg();
-    document.getElementById("f-description").focus();
-    return;
-  }
-
-  addOpp({
-    name,
+function readForm() {
+  return {
+    name: val("f-name"),
     bidDueDate: val("f-due-date"),
     bidDueTime: val("f-due-time"),
     division: val("f-division"),
@@ -986,7 +1168,27 @@ oppForm.addEventListener("submit", (e) => {
     estStartDate: val("f-start-date"),
     estEndDate: val("f-end-date"),
     docsReceivedDate: val("f-docs-date"),
-  });
+  };
+}
+
+oppForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+
+  if (!val("f-name")) {
+    document.getElementById("f-name").focus();
+    return;
+  }
+
+  // No Bid / Cancelled require a reason in the description.
+  if (reasonRequired() && !val("f-description")) {
+    updateReasonMsg();
+    document.getElementById("f-description").focus();
+    return;
+  }
+
+  const opp = readForm();
+  if (editingId != null) updateOpp(editingId, opp);
+  else addOpp(opp);
 
   closeModal();
 });

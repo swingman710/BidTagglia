@@ -124,7 +124,7 @@
     <div id="modal" class="modal-overlay" hidden>
       <div class="modal modal-wide">
         <div class="modal-head">
-          <h2>New Opportunity</h2>
+          <h2 id="modal-title">New Opportunity</h2>
           <button class="modal-close" id="modal-close" title="Close">✕</button>
         </div>
         <form id="opp-form" class="opp-form" autocomplete="off">
@@ -328,9 +328,24 @@
 
           <div class="modal-actions">
             <button type="button" class="btn-ghost" id="modal-cancel">Cancel</button>
-            <button type="submit" class="btn-primary">Save opportunity</button>
+            <button type="submit" class="btn-primary" id="modal-submit">Save opportunity</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- Opportunity detail modal -->
+    <div id="detail-modal" class="modal-overlay" hidden>
+      <div class="modal modal-wide">
+        <div class="modal-head">
+          <h2 id="detail-title">Opportunity</h2>
+          <button class="modal-close" id="detail-close" title="Close">✕</button>
+        </div>
+        <div id="detail-body" class="detail-body"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" id="detail-cancel">Close</button>
+          <button type="button" class="btn-primary" id="detail-edit">Edit</button>
+        </div>
       </div>
     </div>
 
