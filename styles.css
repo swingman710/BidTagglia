@@ -2030,3 +2030,38 @@ table.bids tbody tr.bid-row {
 .modal-actions .btn-danger[hidden] {
   display: none;
 }
+
+/* ==========================================================================
+   COMPANIES
+   ========================================================================== */
+
+.company-form .section-grid {
+  margin-bottom: 16px;
+}
+
+.company-form textarea {
+  width: 100%;
+  padding: 10px 12px;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  resize: vertical;
+}
+
+.company-form textarea:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: var(--ring);
+}
+
+.company-table td a {
+  color: var(--blue-dark);
+  text-decoration: none;
+}
+
+.company-table td a:hover {
+  text-decoration: underline;
+}

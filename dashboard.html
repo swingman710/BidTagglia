@@ -36,6 +36,7 @@
       <div class="mainnav-inner">
         <button class="nav-tab active" data-view="opportunities">Opportunities</button>
         <button class="nav-tab" data-view="reports">Reports</button>
+        <button class="nav-tab" data-view="companies">Companies</button>
         <!-- Admin only: revealed by users.js -->
         <button class="nav-tab" data-view="users" hidden>Users</button>
       </div>
@@ -232,6 +233,37 @@
             </table>
           </div>
           <div id="rep-empty" class="empty">No bids match these filters.</div>
+        </section>
+       </div>
+
+       <!-- ================= Companies view ================= -->
+       <div class="view" id="view-companies" hidden>
+        <section class="panel">
+          <div class="table-head">
+            <h2>Companies</h2>
+            <span id="company-count" class="count-pill">0</span>
+            <span class="rep-hint">
+              Every company priced on a bid. Click one to fill in its details.
+            </span>
+          </div>
+          <div class="table-wrap">
+            <table class="bids company-table">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Type</th>
+                  <th>Industry</th>
+                  <th>Phone</th>
+                  <th>Website</th>
+                  <th class="num">Bids</th>
+                </tr>
+              </thead>
+              <tbody id="company-rows"></tbody>
+            </table>
+          </div>
+          <div id="company-empty" class="empty">
+            No companies yet — they're added when you price a bid to one.
+          </div>
         </section>
        </div>
 
@@ -509,6 +541,47 @@
       </div>
     </div>
 
+    <!-- Company detail (Companies tab) -->
+    <div id="company-modal" class="modal-overlay" hidden>
+      <div class="modal">
+        <div class="modal-head">
+          <h2 id="company-title">Company</h2>
+          <button class="modal-close" id="company-close" title="Close">✕</button>
+        </div>
+        <div class="company-form">
+          <div class="section-grid">
+            <div class="field">
+              <label for="c-type">Type</label>
+              <select id="c-type"></select>
+            </div>
+            <div class="field">
+              <label for="c-industry">Industry</label>
+              <select id="c-industry"></select>
+            </div>
+            <div class="field">
+              <label for="c-phone">Phone number</label>
+              <input type="tel" id="c-phone" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="c-website">Website</label>
+              <input type="text" id="c-website" placeholder="example.com" autocomplete="off" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="c-notes">Notes</label>
+            <textarea id="c-notes" rows="4"></textarea>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" id="company-cancel">Cancel</button>
+          <button type="button" class="btn-primary" id="company-save">Save company</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Companies already bid to, for the pricing form -->
+    <datalist id="dl-quote-company"></datalist>
+
     <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -517,6 +590,7 @@
     <script src="data.js"></script>
     <script src="dashboard.js"></script>
     <script src="reports.js"></script>
+    <script src="companies.js"></script>
     <script src="users.js"></script>
   </body>
 </html>

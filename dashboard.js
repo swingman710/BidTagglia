@@ -21,9 +21,42 @@ document.getElementById("logout").addEventListener("click", () => {
 let oppsCache = [];
 let estimatorChart = null;
 
+// Every pricing quote, loaded alongside the bids.
+let quotesCache = [];
+
 // opportunity id (as text) -> price of its most recent proposal quote. Drives
 // the Project Value column; see oppValue().
 const proposalPrices = new Map();
+
+// ---------- Company names ----------
+// Companies are typed by hand in the quote form, so "Turner", "turner " and
+// "Turner  " are the same company. Everything that lists or groups companies
+// goes through here so a name appears exactly once, spelled the way we first
+// saw it.
+
+const companyDisplay = new Map(); // canonical key -> display name
+
+function companyKey(name) {
+  return String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function rememberCompany(name) {
+  const key = companyKey(name);
+  if (!key) return null;
+  if (!companyDisplay.has(key)) companyDisplay.set(key, String(name).trim());
+  return companyDisplay.get(key);
+}
+
+// The agreed spelling for a name we've seen before (else the name, tidied up).
+function canonicalCompany(name) {
+  const key = companyKey(name);
+  if (!key) return null;
+  return companyDisplay.get(key) || String(name).trim();
+}
+
+function knownCompanies() {
+  return [...companyDisplay.values()].sort((a, b) => a.localeCompare(b));
+}
 
 function loadOpps() {
   return oppsCache;
@@ -103,21 +136,25 @@ async function fetchOpps() {
   return oppsCache;
 }
 
-// "Most recent" = the latest date the price was sent on, falling back to when
-// the quote was entered. Quotes with no price at all are ignored.
-async function fetchProposalPrices() {
+// Loads every quote, then derives the project-value lookup from it: the most
+// recent proposal per bid, "most recent" being the latest date the price was
+// sent on, falling back to when the quote was entered. Quotes with no price at
+// all are ignored. Every company named on a quote is registered here too.
+async function fetchQuotes() {
   const { data, error } = await sb
     .from(PRICING_TABLE)
-    .select("opportunity_id, price, price_sent_on, created_at")
-    .eq("type", "proposal");
+    .select("opportunity_id, company, type, price, price_sent_on, created_at");
   if (error) {
-    console.error("Proposal price load error:", error.message);
-    return proposalPrices;
+    console.error("Quote load error:", error.message);
+    return quotesCache;
   }
+  quotesCache = data || [];
 
   const stamps = new Map(); // opp id -> stamp of the quote we kept
   proposalPrices.clear();
-  for (const q of data || []) {
+  for (const q of quotesCache) {
+    rememberCompany(q.company);
+    if (q.type !== "proposal") continue;
     if (q.price == null || q.price === "") continue;
     const key = String(q.opportunity_id);
     const stamp = q.price_sent_on || q.created_at || "";
@@ -125,11 +162,11 @@ async function fetchProposalPrices() {
     proposalPrices.set(key, Number(q.price));
     stamps.set(key, stamp);
   }
-  return proposalPrices;
+  return quotesCache;
 }
 
 async function refreshOpps() {
-  await fetchProposalPrices();
+  await fetchQuotes();
   await fetchOpps();
   render();
   renderCharts(oppsCache);
@@ -1363,7 +1400,10 @@ function showQuoteForm(type, mount) {
   card.innerHTML = `
     <h4>Add ${labelText} Price</h4>
     <div class="quote-grid">
-      <label>Company<input type="text" data-f="company" /></label>
+      <label>Company
+        <input type="text" data-f="company" list="dl-quote-company" autocomplete="off"
+               placeholder="Search or add new…" />
+      </label>
       <label>Price<input type="number" min="0" step="0.01" data-f="price" /></label>
       <label>Price sent on<input type="date" data-f="price_sent_on" /></label>
       <label class="full">Notes<textarea rows="3" data-f="notes"></textarea></label>
@@ -1373,17 +1413,20 @@ function showQuoteForm(type, mount) {
       <button type="button" class="btn-primary" data-act="save">Save price</button>
     </div>`;
   mount.appendChild(card);
+  fillDatalist("dl-quote-company", knownCompanies());
 
   const field = (f) => card.querySelector(`[data-f="${f}"]`);
   card.querySelector('[data-act="cancel"]').addEventListener("click", () => {
     mount.innerHTML = "";
   });
   card.querySelector('[data-act="save"]').addEventListener("click", async () => {
-    const company = field("company").value.trim();
+    // Reuse the existing spelling when this company has been bid before.
+    const company = canonicalCompany(field("company").value);
     if (!company) {
       field("company").focus();
       return;
     }
+    rememberCompany(company);
     const priceRaw = field("price").value;
     await addPricing({
       opportunity_id: String(detailOpp.id),

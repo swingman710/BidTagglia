@@ -62,20 +62,15 @@
 
   // ---------- Filter state ----------
 
-  // opportunity id (as text) -> companies quoted on the Pricing tab.
+  // opportunity id (as text) -> companies quoted on the Pricing tab. Names run
+  // through canonicalCompany() so a company shows up once, however it was
+  // typed on each quote.
   const quoteCompanies = new Map();
 
-  async function loadQuoteCompanies() {
+  function loadQuoteCompanies() {
     quoteCompanies.clear();
-    const { data, error } = await sb
-      .from("pricing_quotes")
-      .select("opportunity_id, company");
-    if (error) {
-      console.error("Quote load error:", error.message);
-      return;
-    }
-    for (const q of data || []) {
-      const company = String(q.company || "").trim();
+    for (const q of quotesCache) {
+      const company = canonicalCompany(q.company);
       if (!company) continue;
       const key = String(q.opportunity_id);
       const list = quoteCompanies.get(key) || [];
@@ -346,12 +341,12 @@
 
   // Options come from saved bids: rebuild the filter row only when the set of
   // available values actually changed (a bid was added or edited).
-  async function openReports() {
+  function openReports() {
     if (!built) {
       buildGroupBy();
       built = true;
     }
-    await loadQuoteCompanies();
+    loadQuoteCompanies();
     const sig = DIMS.map((d) => optionsFor(d).join("|")).join("##");
     if (sig !== optionsSig) {
       optionsSig = sig;
