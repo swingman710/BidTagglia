@@ -212,8 +212,8 @@ function oppValue(o) {
 }
 
 // A countdown only means something while a bid is still being worked. For
-// these statuses the column shows the due date itself instead.
-const DUE_DATE_STATUSES = new Set([
+// these statuses the cell is just greyed out.
+const NO_COUNTDOWN_STATUSES = new Set([
   "Future Opportunity", "Lost", "No Bid", "On Hold (Bid)", "Won", "Cancelled",
 ]);
 
@@ -325,9 +325,8 @@ function render() {
     dueTd.textContent = formatDueDateTime(opp.bidDueDate, opp.bidDueTime);
 
     const daysTd = document.createElement("td");
-    if (DUE_DATE_STATUSES.has(opp.status)) {
-      daysTd.textContent = opp.bidDueDate ? formatDate(opp.bidDueDate) : "—";
-      daysTd.className = "days-date";
+    if (NO_COUNTDOWN_STATUSES.has(opp.status)) {
+      daysTd.className = "days-na"; // greyed out — the due date is next door
     } else {
       const days = daysUntil(opp.bidDueDate);
       if (days === null) {

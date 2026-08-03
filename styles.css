@@ -699,9 +699,10 @@ table.bids td.days-overdue {
   font-weight: 600;
 }
 
-/* Statuses where the countdown is replaced by the due date itself */
-table.bids td.days-date {
-  color: var(--muted);
+/* Statuses with no countdown (won, lost, on hold, ...) — the Bid Due column
+   already carries the date, so the cell is simply greyed out. */
+table.bids td.days-na {
+  background: #e8ebf1;
 }
 
 table.bids .col-value {
