@@ -36,6 +36,8 @@
       <div class="mainnav-inner">
         <button class="nav-tab active" data-view="opportunities">Opportunities</button>
         <button class="nav-tab" data-view="reports">Reports</button>
+        <!-- Admin only: revealed by users.js -->
+        <button class="nav-tab" data-view="users" hidden>Users</button>
       </div>
     </nav>
 
@@ -230,6 +232,37 @@
             </table>
           </div>
           <div id="rep-empty" class="empty">No bids match these filters.</div>
+        </section>
+       </div>
+
+       <!-- ================= Users view (admin only) ================= -->
+       <div class="view" id="view-users" hidden>
+        <section class="panel">
+          <div class="table-head">
+            <h2>Users</h2>
+            <span id="user-count" class="count-pill">0</span>
+            <span class="rep-hint">
+              Everyone who signs in is added automatically. Roles are recorded
+              but not enforced yet.
+            </span>
+          </div>
+          <div class="table-wrap">
+            <table class="bids user-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Sign-in</th>
+                  <th>Method</th>
+                  <th>First signed in</th>
+                  <th>Last active</th>
+                  <th>Permission level</th>
+                  <th class="col-status">Access</th>
+                </tr>
+              </thead>
+              <tbody id="user-rows"></tbody>
+            </table>
+          </div>
+          <div id="user-empty" class="empty">No users yet.</div>
         </section>
        </div>
       </div>
@@ -480,5 +513,6 @@
     <script src="data.js"></script>
     <script src="dashboard.js"></script>
     <script src="reports.js"></script>
+    <script src="users.js"></script>
   </body>
 </html>

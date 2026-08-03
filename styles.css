@@ -1887,3 +1887,102 @@ table.bids tbody tr.bid-row {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ==========================================================================
+   USERS VIEW (admin only)
+   ========================================================================== */
+
+.user-table td {
+  vertical-align: middle;
+}
+
+.user-table tr.is-blocked td {
+  color: var(--faint);
+}
+
+.role-select {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  padding: 5px 8px;
+}
+
+.role-select:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: var(--ring);
+}
+
+.role-select:disabled {
+  background: var(--page-bg);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.user-table .col-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-ghost.sm.danger {
+  color: var(--red);
+  border-color: #f0c9c9;
+}
+
+.btn-ghost.sm.danger:hover {
+  background: var(--red-soft);
+}
+
+.btn-ghost.sm:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.you-pill {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--blue-dark);
+  background: var(--blue-soft);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+/* Shown instead of the app when a blocked member signs in */
+.blocked-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(42, 48, 64, 0.55);
+  display: grid;
+  place-items: center;
+}
+
+.blocked-card {
+  background: var(--surface);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  padding: 28px 32px;
+  max-width: 420px;
+  text-align: center;
+}
+
+.blocked-card h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+
+.blocked-card p {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+  margin-bottom: 18px;
+}

@@ -135,13 +135,20 @@ const AUTH_CONFIG = {
   }
 
   // For gated pages: bounce to the login screen if not signed in by either
-  // method. Returns a normalized identity ({ name }), or null if redirecting.
+  // method. Returns a normalized identity ({ name, email, source }), or null
+  // if redirecting. `email` is null for manual sign-ins (they have no UPN).
   async function requireAuth() {
     const account = await getAccount();
-    if (account) return { name: account.name || account.username || "user" };
+    if (account) {
+      return {
+        name: account.name || account.username || "user",
+        email: (account.username || "").toLowerCase() || null,
+        source: "microsoft",
+      };
+    }
 
     const manual = getManualUser();
-    if (manual) return { name: manual };
+    if (manual) return { name: manual, email: null, source: "manual" };
 
     window.location.href = "index.html";
     return null;

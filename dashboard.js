@@ -318,6 +318,30 @@ function render() {
   }
 }
 
+// ---------- Top-level views (nav tabs) ----------
+// Each .nav-tab has data-view="x" and shows the matching #view-x section.
+// Other scripts register work to run when their view is opened.
+
+const VIEW_HOOKS = {};
+
+function onViewOpen(view, fn) {
+  VIEW_HOOKS[view] = fn;
+}
+
+function showView(view) {
+  for (const tab of document.querySelectorAll(".nav-tab")) {
+    tab.classList.toggle("active", tab.dataset.view === view);
+  }
+  for (const section of document.querySelectorAll("main .view")) {
+    section.hidden = section.id !== `view-${view}`;
+  }
+  if (VIEW_HOOKS[view]) VIEW_HOOKS[view]();
+}
+
+for (const tab of document.querySelectorAll(".nav-tab")) {
+  tab.addEventListener("click", () => showView(tab.dataset.view));
+}
+
 // ---------- Charts ----------
 
 function renderCharts(opps) {

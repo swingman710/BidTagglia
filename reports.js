@@ -319,17 +319,6 @@
     runReport();
   }
 
-  // ---------- View switching ----------
-
-  function showView(view) {
-    for (const tab of document.querySelectorAll(".nav-tab")) {
-      tab.classList.toggle("active", tab.dataset.view === view);
-    }
-    $("view-opportunities").hidden = view !== "opportunities";
-    $("view-reports").hidden = view !== "reports";
-    if (view === "reports") openReports();
-  }
-
   // Options come from saved bids: rebuild the filter row only when the set of
   // available values actually changed (a bid was added or edited).
   function openReports() {
@@ -345,9 +334,7 @@
     runReport();
   }
 
-  for (const tab of document.querySelectorAll(".nav-tab")) {
-    tab.addEventListener("click", () => showView(tab.dataset.view));
-  }
+  onViewOpen("reports", openReports);
 
   $("rep-groupby").addEventListener("change", (e) => {
     groupBy = e.target.value;
