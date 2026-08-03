@@ -15,6 +15,11 @@ const AUTH_CONFIG = {
   clientId: "4a089262-8a27-4948-94bb-ddff0d3ba9ef",
   tenantId: "c5f603e0-e05f-4662-8438-38b1980edf73", // tenant GUID -> org-only sign-in
 
+  // Everyone with an address on this domain should be able to sign in. It is
+  // not an allow-list (tenant guests still work) — it's used to explain
+  // failures and to make sure a battag.com account is never turned away.
+  orgDomain: "battag.com",
+
   // Scopes requested at sign-in. User.Read is enough to identify the user;
   // SharePoint data scopes (e.g. Sites.ReadWrite.All) get added later when the
   // data layer moves off Supabase.
@@ -26,6 +31,7 @@ const AUTH_CONFIG = {
 (function () {
   let pca = null; // MSAL PublicClientApplication (lazy singleton)
   let readyPromise = null;
+  let lastError = null; // why the last sign-in attempt failed, if it did
 
   function configured() {
     return (
@@ -68,8 +74,18 @@ const AUTH_CONFIG = {
     readyPromise = (async () => {
       const app = getMsal();
       await app.initialize();
-      const resp = await app.handleRedirectPromise();
-      if (resp && resp.account) app.setActiveAccount(resp.account);
+
+      // A rejected redirect is how Entra reports "this account can't sign in"
+      // (wrong tenant, app assignment required, ...). Swallowing it silently
+      // drops the user back on the login page with no idea why, so keep it.
+      try {
+        const resp = await app.handleRedirectPromise();
+        if (resp && resp.account) app.setActiveAccount(resp.account);
+      } catch (e) {
+        lastError = e;
+        console.error("Microsoft sign-in failed:", e);
+      }
+
       if (!app.getActiveAccount()) {
         const all = app.getAllAccounts();
         if (all.length) app.setActiveAccount(all[0]);
@@ -81,7 +97,50 @@ const AUTH_CONFIG = {
 
   async function signIn() {
     const app = await ready();
-    await app.loginRedirect({ scopes: AUTH_CONFIG.scopes });
+    lastError = null;
+    // Always offer the account picker: without it, anyone whose browser is
+    // already signed in to a different Microsoft account gets bounced by the
+    // tenant check with no chance to pick their battag.com account.
+    await app.loginRedirect({
+      scopes: AUTH_CONFIG.scopes,
+      prompt: "select_account",
+    });
+  }
+
+  // True for addresses on the org domain — these must always be let through.
+  function isOrgAccount(email) {
+    return String(email || "").toLowerCase().endsWith(`@${AUTH_CONFIG.orgDomain}`);
+  }
+
+  // Why the last Microsoft sign-in failed: { code, message, help }. null if it
+  // didn't fail. `help` is a plain-English fix for the codes we know about.
+  function getLastError() {
+    if (!lastError) return null;
+    const code = lastError.errorCode || "";
+    const message = lastError.errorMessage || lastError.message || String(lastError);
+    const domain = AUTH_CONFIG.orgDomain;
+
+    let help = "";
+    if (/AADSTS50020|user_account_not_in_tenant/i.test(code + message)) {
+      help =
+        `That Microsoft account isn't part of the ${domain} organization. ` +
+        `Sign in with your ${domain} address.`;
+    } else if (/AADSTS50105|AADSTS50177/i.test(message)) {
+      help =
+        "Your account hasn't been given access to this app yet. Ask an admin " +
+        "to assign you to it in Entra (Enterprise applications -> Users and groups).";
+    } else if (/AADSTS65001|consent/i.test(message)) {
+      help = "This app still needs admin consent in Entra before you can sign in.";
+    } else if (/AADSTS50011|redirect_uri/i.test(message)) {
+      help =
+        "This site's address isn't registered as a redirect URI on the Entra " +
+        "app registration.";
+    }
+    return { code, message, help };
+  }
+
+  function clearLastError() {
+    lastError = null;
   }
 
   async function signOut() {
@@ -163,5 +222,9 @@ const AUTH_CONFIG = {
     requireAuth,
     manualSignIn,
     getManualUser,
+    isOrgAccount,
+    getLastError,
+    clearLastError,
+    orgDomain: AUTH_CONFIG.orgDomain,
   };
 })();

@@ -26,6 +26,17 @@ function showError(msg) {
   } catch (e) {
     console.error(e);
   }
+
+  // Landed back here without an account? Say why, instead of looking like
+  // nothing happened.
+  const failure = BBAuth.getLastError();
+  if (failure) {
+    showError(
+      failure.help ||
+        `Microsoft sign-in failed${failure.code ? ` (${failure.code})` : ""}. ` +
+          failure.message
+    );
+  }
   // Microsoft sign-in needs the Azure app/tenant IDs; the manual form does not.
   if (!BBAuth.configured()) signinBtn.disabled = true;
 })();

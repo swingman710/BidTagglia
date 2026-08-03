@@ -224,7 +224,10 @@ const MEMBER_ROLES = ["Admin", "Admin Super User", "Super User", "User", "Test"]
 
     me = await checkIn(account);
 
-    if (me && me.blocked) {
+    // Only an explicit block keeps someone out. If the directory can't be
+    // reached at all, checkIn returns null and the person still gets in —
+    // a Supabase hiccup must never lock the org out of the app.
+    if (me && me.blocked === true) {
       showBlocked(account);
       return;
     }
