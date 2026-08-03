@@ -1986,3 +1986,30 @@ table.bids tbody tr.bid-row {
   line-height: 1.6;
   margin-bottom: 18px;
 }
+
+/* Destructive action in a modal footer — sits opposite Cancel/Save */
+.btn-danger {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--red);
+  background: var(--surface);
+  border: 1px solid #f0c9c9;
+  border-radius: 4px;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.btn-danger:hover {
+  background: var(--red-soft);
+  border-color: var(--red);
+}
+
+.modal-actions .btn-danger {
+  margin-right: auto;
+}
+
+.modal-actions .btn-danger[hidden] {
+  display: none;
+}

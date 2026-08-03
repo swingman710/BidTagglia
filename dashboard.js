@@ -103,6 +103,7 @@ async function refreshOpps() {
   await fetchOpps();
   render();
   renderCharts(oppsCache);
+  refreshActiveView(); // the Reports tab lists bids too
 }
 
 // ---------- Static option sets ----------
@@ -336,6 +337,13 @@ function showView(view) {
     section.hidden = section.id !== `view-${view}`;
   }
   if (VIEW_HOOKS[view]) VIEW_HOOKS[view]();
+}
+
+// Re-run whichever view is open (after the data behind it changed).
+function refreshActiveView() {
+  const tab = document.querySelector(".nav-tab.active");
+  const hook = tab && VIEW_HOOKS[tab.dataset.view];
+  if (hook) hook();
 }
 
 for (const tab of document.querySelectorAll(".nav-tab")) {
@@ -967,6 +975,8 @@ function openModal(opp) {
   document.getElementById("modal-submit").textContent = editingId
     ? "Update opportunity"
     : "Save opportunity";
+  // Deleting only makes sense for a bid that's already saved.
+  document.getElementById("modal-delete").hidden = editingId == null;
 
   modal.hidden = false;
   document.getElementById("f-name").focus();
@@ -979,6 +989,17 @@ function closeModal() {
 document.getElementById("new-opp").addEventListener("click", () => openModal());
 document.getElementById("modal-close").addEventListener("click", closeModal);
 document.getElementById("modal-cancel").addEventListener("click", closeModal);
+
+document.getElementById("modal-delete").addEventListener("click", async () => {
+  if (editingId == null) return;
+  const label = val("f-name") || "this bid";
+  if (!confirm(`Delete “${label}”? This also removes its pricing quotes and project team, and can't be undone.`)) {
+    return;
+  }
+  const id = editingId;
+  closeModal();
+  await deleteOpp(id);
+});
 modal.addEventListener("click", (e) => {
   if (e.target === modal) closeModal();
 });
@@ -1505,7 +1526,18 @@ async function updateOpp(id, opp) {
   await refreshOpps();
 }
 
+// Removes the bid and its child rows (pricing quotes, project team), which
+// have no FK cascade — they're keyed on the stringified opportunity id.
 async function deleteOpp(id) {
+  const oppId = String(id);
+  for (const table of [PRICING_TABLE, MEMBERS_TABLE]) {
+    const { error } = await sb.from(table).delete().eq("opportunity_id", oppId);
+    if (error) {
+      alert("Could not delete opportunity: " + error.message);
+      return;
+    }
+  }
+
   const { error } = await sb.from(SUPABASE_TABLE).delete().eq("id", id);
   if (error) {
     alert("Could not delete opportunity: " + error.message);
