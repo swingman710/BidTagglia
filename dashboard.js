@@ -21,6 +21,10 @@ document.getElementById("logout").addEventListener("click", () => {
 let oppsCache = [];
 let estimatorChart = null;
 
+// opportunity id (as text) -> price of its most recent proposal quote. Drives
+// the Project Value column; see oppValue().
+const proposalPrices = new Map();
+
 function loadOpps() {
   return oppsCache;
 }
@@ -99,7 +103,33 @@ async function fetchOpps() {
   return oppsCache;
 }
 
+// "Most recent" = the latest date the price was sent on, falling back to when
+// the quote was entered. Quotes with no price at all are ignored.
+async function fetchProposalPrices() {
+  const { data, error } = await sb
+    .from(PRICING_TABLE)
+    .select("opportunity_id, price, price_sent_on, created_at")
+    .eq("type", "proposal");
+  if (error) {
+    console.error("Proposal price load error:", error.message);
+    return proposalPrices;
+  }
+
+  const stamps = new Map(); // opp id -> stamp of the quote we kept
+  proposalPrices.clear();
+  for (const q of data || []) {
+    if (q.price == null || q.price === "") continue;
+    const key = String(q.opportunity_id);
+    const stamp = q.price_sent_on || q.created_at || "";
+    if (proposalPrices.has(key) && stamp <= stamps.get(key)) continue;
+    proposalPrices.set(key, Number(q.price));
+    stamps.set(key, stamp);
+  }
+  return proposalPrices;
+}
+
 async function refreshOpps() {
+  await fetchProposalPrices();
   await fetchOpps();
   render();
   renderCharts(oppsCache);
@@ -173,9 +203,19 @@ function daysUntil(value) {
   return Math.round((due - today) / 86400000);
 }
 
+// Project value = the most recent proposal price we sent, if there is one;
+// otherwise the budgeted project value from the form.
 function oppValue(o) {
+  const quoted = proposalPrices.get(String(o.id));
+  if (quoted != null) return quoted;
   return Number(o.budgetedProjectValue ?? o.value ?? 0) || 0;
 }
+
+// A countdown only means something while a bid is still being worked. For
+// these statuses the column shows the due date itself instead.
+const DUE_DATE_STATUSES = new Set([
+  "Future Opportunity", "Lost", "No Bid", "On Hold (Bid)", "Won", "Cancelled",
+]);
 
 // Map an opportunity status to a pill color class.
 function statusClass(status) {
@@ -285,12 +325,18 @@ function render() {
     dueTd.textContent = formatDueDateTime(opp.bidDueDate, opp.bidDueTime);
 
     const daysTd = document.createElement("td");
-    const days = daysUntil(opp.bidDueDate);
-    if (days === null) {
-      daysTd.textContent = "—";
+    if (DUE_DATE_STATUSES.has(opp.status)) {
+      daysTd.textContent = opp.bidDueDate ? formatDate(opp.bidDueDate) : "—";
+      daysTd.className = "days-date";
     } else {
-      daysTd.textContent = days;
-      if (days < 0) daysTd.className = "days-overdue";
+      const days = daysUntil(opp.bidDueDate);
+      if (days === null) {
+        daysTd.textContent = "—";
+      } else {
+        daysTd.textContent = days;
+        daysTd.className =
+          days >= 10 ? "days-ok" : days >= 1 ? "days-soon" : "days-overdue";
+      }
     }
 
     const valueTd = document.createElement("td");
@@ -1147,7 +1193,13 @@ function openDetail(opp) {
 function closeDetail() {
   detailModal.hidden = true;
   detailOpp = null;
-  refreshActiveView(); // quotes/team may have changed while it was open
+  // Adding or removing a proposal can change a bid's project value.
+  if (pricingDirty) {
+    pricingDirty = false;
+    refreshOpps();
+  } else {
+    refreshActiveView(); // team/quote edits the open view may care about
+  }
 }
 
 document.getElementById("detail-close").addEventListener("click", closeDetail);
@@ -1180,9 +1232,17 @@ async function fetchPricing(oppId) {
   return data || [];
 }
 
+// Set when a quote is added or removed, so closing the detail view knows to
+// recompute project values.
+let pricingDirty = false;
+
 async function addPricing(row) {
   const { error } = await sb.from(PRICING_TABLE).insert(row);
-  if (error) alert("Could not save price: " + error.message);
+  if (error) {
+    alert("Could not save price: " + error.message);
+    return;
+  }
+  pricingDirty = true;
 }
 
 async function updatePricingStatus(id, status) {
@@ -1201,6 +1261,7 @@ async function deletePricing(id) {
     alert("Could not delete price: " + error.message);
     return;
   }
+  pricingDirty = true;
   renderPricing();
 }
 

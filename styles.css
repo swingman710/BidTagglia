@@ -39,6 +39,7 @@
   /* Status */
   --green: #16a34a;
   --green-soft: #e7f5ec;
+  --orange: #d97706;
   --red: #dc2626;
   --red-soft: #fdecec;
 
@@ -682,10 +683,25 @@ table.bids td:nth-child(5) {
   border-right: 1px solid var(--col-accent-bd);
 }
 
-/* Past-due bids */
+/* Days-until-due countdown: comfortable / getting close / due or past due */
+table.bids td.days-ok {
+  color: var(--green);
+  font-weight: 600;
+}
+
+table.bids td.days-soon {
+  color: var(--orange);
+  font-weight: 600;
+}
+
 table.bids td.days-overdue {
   color: var(--red);
   font-weight: 600;
+}
+
+/* Statuses where the countdown is replaced by the due date itself */
+table.bids td.days-date {
+  color: var(--muted);
 }
 
 table.bids .col-value {
