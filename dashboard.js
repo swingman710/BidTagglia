@@ -1147,6 +1147,7 @@ function openDetail(opp) {
 function closeDetail() {
   detailModal.hidden = true;
   detailOpp = null;
+  refreshActiveView(); // quotes/team may have changed while it was open
 }
 
 document.getElementById("detail-close").addEventListener("click", closeDetail);

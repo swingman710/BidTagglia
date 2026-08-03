@@ -22,11 +22,14 @@
   const DIMS = [
     { key: "leadEstimator", label: "Lead Estimator", get: (o) => [o.leadEstimator] },
     {
+      // Who we actually priced: the Company on each quote in the Pricing tab.
       key: "company",
       label: "Company Bid To",
       multi: true,
-      get: (o) => [...asList(o.cm), ...asList(o.gc)],
+      get: (o) => quoteCompanies.get(String(o.id)) || [],
     },
+    { key: "cm", label: "CM", multi: true, get: (o) => asList(o.cm) },
+    { key: "gc", label: "GC", multi: true, get: (o) => asList(o.gc) },
     { key: "ownerCustomer", label: "Owner / Customer", get: (o) => [o.ownerCustomer] },
     { key: "projectManager", label: "Project Manager", get: (o) => [o.projectManager] },
     { key: "division", label: "Division", get: (o) => [o.division] },
@@ -58,6 +61,28 @@
   }
 
   // ---------- Filter state ----------
+
+  // opportunity id (as text) -> companies quoted on the Pricing tab.
+  const quoteCompanies = new Map();
+
+  async function loadQuoteCompanies() {
+    quoteCompanies.clear();
+    const { data, error } = await sb
+      .from("pricing_quotes")
+      .select("opportunity_id, company");
+    if (error) {
+      console.error("Quote load error:", error.message);
+      return;
+    }
+    for (const q of data || []) {
+      const company = String(q.company || "").trim();
+      if (!company) continue;
+      const key = String(q.opportunity_id);
+      const list = quoteCompanies.get(key) || [];
+      if (!list.includes(company)) list.push(company);
+      quoteCompanies.set(key, list);
+    }
+  }
 
   const selections = {}; // dim key -> [values]
   let groupBy = "leadEstimator";
@@ -321,11 +346,12 @@
 
   // Options come from saved bids: rebuild the filter row only when the set of
   // available values actually changed (a bid was added or edited).
-  function openReports() {
+  async function openReports() {
     if (!built) {
       buildGroupBy();
       built = true;
     }
+    await loadQuoteCompanies();
     const sig = DIMS.map((d) => optionsFor(d).join("|")).join("##");
     if (sig !== optionsSig) {
       optionsSig = sig;
