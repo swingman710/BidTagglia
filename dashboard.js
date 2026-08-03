@@ -496,9 +496,11 @@ function fillCheckgroup(id, options) {
 // Searchable multi-select combobox: a text field that filters a dropdown of
 // checkbox options; checking adds it as a chip. Stores the selection on the
 // container so readForm() can pull it via container._getSelected().
-function buildMultiCombo(container, options, preselected) {
+// onChange (optional) fires whenever the selection changes.
+function buildMultiCombo(container, options, preselected, onChange) {
   container.innerHTML = "";
   const selected = new Set(Array.isArray(preselected) ? preselected : []);
+  const changed = () => onChange && onChange([...selected]);
 
   const control = document.createElement("div");
   control.className = "mc-control";
@@ -531,6 +533,7 @@ function buildMultiCombo(container, options, preselected) {
         selected.delete(v);
         renderChips();
         if (!panel.hidden) renderPanel();
+        changed();
       });
       chip.appendChild(x);
       chips.appendChild(chip);
@@ -558,6 +561,7 @@ function buildMultiCombo(container, options, preselected) {
         if (cb.checked) selected.add(o);
         else selected.delete(o);
         renderChips();
+        changed();
       });
       const span = document.createElement("span");
       span.textContent = o;

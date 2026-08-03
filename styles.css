@@ -1762,3 +1762,128 @@ table.bids tbody tr.bid-row {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   REPORTS VIEW
+   ========================================================================== */
+
+.report-panel {
+  margin-bottom: 22px;
+}
+
+.rep-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-right: auto;
+}
+
+.rep-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px 14px;
+  padding: 16px;
+}
+
+.rep-field label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+
+.rep-scope {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  padding: 0 16px 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.rep-scope-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.rep-scope-field input,
+.rep-scope-field select {
+  font-family: var(--sans);
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  padding: 8px 10px;
+  min-width: 180px;
+}
+
+.rep-scope-field input:focus,
+.rep-scope-field select:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: var(--ring);
+}
+
+.rep-stats {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.stat .value.bad {
+  color: var(--red);
+}
+
+.rep-chart-card {
+  padding: 16px;
+  margin-bottom: 22px;
+}
+
+.rep-chart-card .chart-body {
+  height: 320px;
+}
+
+.rep-chart-card .chart-empty:not([hidden]) {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.bids th.num,
+.bids td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bids td.good {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.bids td.bad {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.bids td.strong {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+@media (max-width: 1100px) {
+  .rep-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

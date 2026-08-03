@@ -34,16 +34,14 @@
     <!-- Dark slate nav bar -->
     <nav class="mainnav">
       <div class="mainnav-inner">
-        <button class="nav-tab active">Opportunities</button>
-        <button class="nav-tab">Pipeline</button>
-        <button class="nav-tab">Reports</button>
-        <button class="nav-tab">Settings</button>
-        <button class="nav-tab">Support</button>
+        <button class="nav-tab active" data-view="opportunities">Opportunities</button>
+        <button class="nav-tab" data-view="reports">Reports</button>
       </div>
     </nav>
 
     <main class="page">
       <div class="page-inner">
+       <div class="view" id="view-opportunities">
         <!-- Light-blue controls band -->
         <div class="controls">
           <div class="search">
@@ -117,6 +115,123 @@
 
           <div id="empty" class="empty">No opportunities yet — add one above.</div>
         </section>
+       </div>
+
+       <!-- ================= Reports view ================= -->
+       <div class="view" id="view-reports" hidden>
+        <section class="panel report-panel">
+          <div class="table-head">
+            <h2>Win / Loss report</h2>
+            <span class="rep-hint">Pick any combination of variables — bids must match all of them.</span>
+            <button type="button" id="rep-reset" class="btn-ghost sm">Reset</button>
+          </div>
+          <div class="rep-filters" id="rep-filters"></div>
+          <div class="rep-scope">
+            <label class="rep-scope-field">
+              <span>Bid due from</span>
+              <input type="date" id="rep-from" />
+            </label>
+            <label class="rep-scope-field">
+              <span>Bid due to</span>
+              <input type="date" id="rep-to" />
+            </label>
+            <label class="rep-scope-field">
+              <span>Break down by</span>
+              <select id="rep-groupby"></select>
+            </label>
+          </div>
+        </section>
+
+        <section class="stats rep-stats">
+          <div class="stat">
+            <div class="label">Decided bids</div>
+            <div class="value" id="rep-decided">0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Won</div>
+            <div class="value good" id="rep-won">0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Lost</div>
+            <div class="value bad" id="rep-lost">0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Win rate</div>
+            <div class="value accent" id="rep-rate">—</div>
+          </div>
+          <div class="stat">
+            <div class="label">Value won</div>
+            <div class="value good" id="rep-won-value">$0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Value lost</div>
+            <div class="value bad" id="rep-lost-value">$0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Win rate by value</div>
+            <div class="value accent" id="rep-rate-value">—</div>
+          </div>
+          <div class="stat">
+            <div class="label">No bid / cancelled</div>
+            <div class="value" id="rep-nobid">0</div>
+          </div>
+        </section>
+
+        <section class="panel chart-card rep-chart-card">
+          <h2>Won vs lost by <span id="rep-group-label">Lead Estimator</span></h2>
+          <div class="chart-body">
+            <canvas id="repChart"></canvas>
+            <div class="chart-empty" id="rep-chart-empty" hidden>No won or lost bids match these filters.</div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="table-head">
+            <h2>Breakdown</h2>
+            <span id="rep-group-count" class="count-pill">0</span>
+          </div>
+          <div class="table-wrap">
+            <table class="bids rep-table">
+              <thead>
+                <tr>
+                  <th id="rep-group-th">Lead Estimator</th>
+                  <th class="num">Bids</th>
+                  <th class="num">Won</th>
+                  <th class="num">Lost</th>
+                  <th class="num">Win rate</th>
+                  <th class="num">Value won</th>
+                  <th class="num">Value lost</th>
+                </tr>
+              </thead>
+              <tbody id="rep-breakdown"></tbody>
+            </table>
+          </div>
+          <div id="rep-group-empty" class="empty">No decided bids match these filters.</div>
+        </section>
+
+        <section class="panel">
+          <div class="table-head">
+            <h2>Matching bids</h2>
+            <span id="rep-match-count" class="count-pill">0</span>
+          </div>
+          <div class="table-wrap">
+            <table class="bids">
+              <thead>
+                <tr>
+                  <th>Opportunity</th>
+                  <th>Bid Due</th>
+                  <th>Lead Estimator</th>
+                  <th>Company Bid To</th>
+                  <th class="col-value">Value</th>
+                  <th class="col-status">Status</th>
+                </tr>
+              </thead>
+              <tbody id="rep-rows"></tbody>
+            </table>
+          </div>
+          <div id="rep-empty" class="empty">No bids match these filters.</div>
+        </section>
+       </div>
       </div>
     </main>
 
@@ -364,5 +479,6 @@
     <script src="supabase.js"></script>
     <script src="data.js"></script>
     <script src="dashboard.js"></script>
+    <script src="reports.js"></script>
   </body>
 </html>
