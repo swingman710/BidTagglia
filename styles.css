@@ -566,6 +566,60 @@ textarea:focus {
   text-overflow: ellipsis;
 }
 
+/* Funnel segments double as the status filter. */
+.funnel-seg {
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+
+.funnel-seg:hover {
+  opacity: 0.85;
+}
+
+.funnel-seg.is-dim,
+.funnel-label.is-dim {
+  opacity: 0.3;
+}
+
+.funnel-seg.is-picked {
+  stroke: #0f172a;
+  stroke-width: 0.8;
+  vector-effect: non-scaling-stroke;
+}
+
+.funnel-filter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.funnel-clear {
+  border: 1px solid var(--border-2);
+  background: #fff;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.funnel-clear:hover {
+  color: #0f172a;
+}
+
+.chart-hint {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .chart-empty {
   display: flex;
   align-items: center;
@@ -1903,6 +1957,271 @@ table.bids tbody tr.bid-row {
   .rep-stats {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* ==========================================================================
+   CONTACTS / ACTIVITIES TABLES
+   ========================================================================== */
+
+.contact-table td,
+.activity-table td {
+  vertical-align: middle;
+}
+
+.contact-table .col-status,
+.activity-table .col-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A table cell that acts as a link to somewhere else in the app. */
+.linklike {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--blue-dark);
+  cursor: pointer;
+  text-align: left;
+}
+
+.linklike:hover {
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   CALENDAR VIEW
+   ========================================================================== */
+
+.cal-modes {
+  display: inline-flex;
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.cal-mode {
+  border: 0;
+  background: var(--surface);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.cal-mode + .cal-mode {
+  border-left: 1px solid var(--border-2);
+}
+
+.cal-mode:hover {
+  background: var(--page-bg);
+}
+
+.cal-mode.is-active {
+  background: var(--blue-soft);
+  color: var(--blue-dark);
+}
+
+.cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cal-wrap {
+  padding: 16px;
+}
+
+.cal-weekdays,
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.cal-weekdays {
+  margin-bottom: 4px;
+}
+
+.cal-weekday {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+  text-align: center;
+  padding: 4px 0;
+}
+
+.cal-day {
+  min-height: 104px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
+}
+
+.cal-day.is-outside {
+  background: var(--page-bg);
+}
+
+.cal-day.is-outside .cal-daynum {
+  color: var(--faint);
+}
+
+.cal-day.is-today {
+  border-color: var(--blue);
+  box-shadow: var(--ring);
+}
+
+.cal-daynum {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: right;
+  padding: 0 2px;
+}
+
+.cal-entry {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-left: 3px solid var(--blue);
+  border-radius: 4px;
+  background: var(--blue-soft);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding: 3px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-entry:hover {
+  filter: brightness(0.96);
+}
+
+/* Bid due dates carry their opportunity's status color. */
+.cal-entry.bid.won {
+  border-left-color: var(--green);
+  background: var(--green-soft);
+}
+
+.cal-entry.bid.lost {
+  border-left-color: var(--red);
+  background: var(--red-soft);
+}
+
+.cal-entry.bid.hold {
+  border-left-color: #64748b;
+  background: #eef1f5;
+}
+
+@media (max-width: 900px) {
+  .cal-day {
+    min-height: 76px;
+  }
+
+  .cal-entry {
+    font-size: 10px;
+  }
+}
+
+/* ==========================================================================
+   INLINE FORMS
+   A form that opens inside a panel, above its table (add user, add contact,
+   add activity) rather than in a modal.
+   ========================================================================== */
+
+.inline-form {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--page-bg);
+  padding: 16px;
+  margin: 16px;
+}
+
+.inline-form h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.inline-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px 16px;
+}
+
+.inline-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.inline-form-grid label.full {
+  grid-column: 1 / -1;
+}
+
+.inline-form-grid input,
+.inline-form-grid select,
+.inline-form-grid textarea {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 5px;
+  padding: 7px 9px;
+  width: 100%;
+}
+
+.inline-form-grid textarea {
+  resize: vertical;
+}
+
+.inline-form-grid input:focus,
+.inline-form-grid select:focus,
+.inline-form-grid textarea:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: var(--ring);
+}
+
+.inline-form-grid .opt {
+  font-weight: 500;
+  color: var(--faint);
+  text-transform: none;
+}
+
+.inline-form-error {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--red);
+}
+
+.inline-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
 }
 
 /* ==========================================================================

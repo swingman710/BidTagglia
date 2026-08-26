@@ -37,6 +37,9 @@
         <button class="nav-tab active" data-view="opportunities">Opportunities</button>
         <button class="nav-tab" data-view="reports">Reports</button>
         <button class="nav-tab" data-view="companies">Companies</button>
+        <button class="nav-tab" data-view="contacts">Contacts</button>
+        <button class="nav-tab" data-view="activities">Activities</button>
+        <button class="nav-tab" data-view="calendar">Calendar</button>
         <!-- Admin only: revealed by users.js -->
         <button class="nav-tab" data-view="users" hidden>Users</button>
       </div>
@@ -49,7 +52,7 @@
         <div class="controls">
           <div class="search">
             <span class="ic">⌕</span>
-            <input id="search" type="text" placeholder="Search ticker, company or profile" />
+            <input id="search" type="text" placeholder="Search opportunity, division, estimator or owner" />
           </div>
           <div class="controls-right">
             <button id="new-opp" class="btn-primary inline">+ New Opportunity</button>
@@ -59,10 +62,11 @@
         <!-- Charts -->
         <section class="charts">
           <div class="panel chart-card">
-            <h2>Bid Pipeline</h2>
+            <h2>Bid Pipeline <span class="chart-hint">click a stage to filter</span></h2>
             <div class="chart-body">
               <div id="funnel" class="funnel"></div>
             </div>
+            <div id="funnel-filter" class="funnel-filter" hidden></div>
           </div>
           <div class="panel chart-card">
             <h2>Active Bids by Lead Estimator</h2>
@@ -267,6 +271,152 @@
         </section>
        </div>
 
+       <!-- ================= Contacts view ================= -->
+       <div class="view" id="view-contacts" hidden>
+        <section class="panel">
+          <div class="table-head">
+            <h2>Contacts</h2>
+            <span id="contact-count" class="count-pill">0</span>
+            <span class="rep-hint">People at the companies we bid to.</span>
+            <button id="new-contact" class="btn-primary inline">+ New Contact</button>
+          </div>
+
+          <div class="inline-form" id="new-contact-form" hidden>
+            <h3 id="ct-form-title">New contact</h3>
+            <div class="inline-form-grid">
+              <label>Name
+                <input type="text" id="ct-name" autocomplete="off" />
+              </label>
+              <label>Email
+                <input type="email" id="ct-email" autocomplete="off" />
+              </label>
+              <label>Phone number
+                <input type="tel" id="ct-phone" autocomplete="off" />
+              </label>
+              <label>Company
+                <input type="text" id="ct-company" list="dl-contact-company"
+                       placeholder="Select or add new…" autocomplete="off" />
+              </label>
+            </div>
+            <div class="inline-form-error" id="ct-error" hidden></div>
+            <div class="inline-form-actions">
+              <button type="button" class="btn-ghost" id="ct-cancel">Cancel</button>
+              <button type="button" class="btn-primary" id="ct-save">Add contact</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="bids contact-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Phone number</th>
+                  <th>Company</th>
+                  <th class="col-status">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="contact-rows"></tbody>
+            </table>
+          </div>
+          <div id="contact-empty" class="empty">
+            No contacts yet — add one above.
+          </div>
+        </section>
+       </div>
+
+       <!-- ================= Activities view ================= -->
+       <div class="view" id="view-activities" hidden>
+        <section class="panel">
+          <div class="table-head">
+            <h2>Activities</h2>
+            <span id="activity-count" class="count-pill">0</span>
+            <span class="rep-hint">
+              Site walks, RFI dates, calls — anything scheduled against a bid.
+            </span>
+            <button id="new-activity" class="btn-primary inline">+ New Activity</button>
+          </div>
+
+          <div class="inline-form" id="new-activity-form" hidden>
+            <h3 id="ac-form-title">New activity</h3>
+            <div class="inline-form-grid">
+              <label>Title
+                <input type="text" id="ac-title" autocomplete="off" />
+              </label>
+              <label>Activity type
+                <input type="text" id="ac-type" list="dl-activity-type"
+                       placeholder="Select or type your own…" autocomplete="off" />
+              </label>
+              <label>Scheduled date
+                <input type="date" id="ac-date" />
+              </label>
+              <label>Related opportunity
+                <input type="text" id="ac-opp" list="dl-activity-opp"
+                       placeholder="Search opportunities…" autocomplete="off" />
+              </label>
+              <label>Related contact
+                <input type="text" id="ac-contact" list="dl-activity-contact"
+                       placeholder="Search contacts…" autocomplete="off" />
+              </label>
+              <label class="full">Notes
+                <textarea id="ac-notes" rows="3"></textarea>
+              </label>
+            </div>
+            <div class="inline-form-error" id="ac-error" hidden></div>
+            <div class="inline-form-actions">
+              <button type="button" class="btn-ghost" id="ac-cancel">Cancel</button>
+              <button type="button" class="btn-primary" id="ac-save">Add activity</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="bids activity-table">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Type</th>
+                  <th>Scheduled</th>
+                  <th>Opportunity</th>
+                  <th>Contact</th>
+                  <th class="col-status">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="activity-rows"></tbody>
+            </table>
+          </div>
+          <div id="activity-empty" class="empty">
+            No activities yet — add one above.
+          </div>
+        </section>
+       </div>
+
+       <!-- ================= Calendar view ================= -->
+       <div class="view" id="view-calendar" hidden>
+        <section class="panel">
+          <div class="table-head">
+            <h2 id="cal-title">Calendar</h2>
+            <div class="cal-modes" id="cal-modes">
+              <button type="button" class="cal-mode is-active" data-mode="activities">
+                Activities
+              </button>
+              <button type="button" class="cal-mode" data-mode="bids">
+                Bid due dates
+              </button>
+            </div>
+            <span class="rep-hint" id="cal-month-hint"></span>
+            <div class="cal-nav">
+              <button type="button" class="btn-ghost sm" id="cal-prev">‹</button>
+              <button type="button" class="btn-ghost sm" id="cal-today">Today</button>
+              <button type="button" class="btn-ghost sm" id="cal-next">›</button>
+            </div>
+          </div>
+          <div class="cal-wrap">
+            <div class="cal-weekdays" id="cal-weekdays"></div>
+            <div class="cal-grid" id="cal-grid"></div>
+          </div>
+        </section>
+       </div>
+
        <!-- ================= Users view (admin only) ================= -->
        <div class="view" id="view-users" hidden>
         <section class="panel">
@@ -274,18 +424,41 @@
             <h2>Users</h2>
             <span id="user-count" class="count-pill">0</span>
             <span class="rep-hint">
-              Everyone who signs in is added automatically. Roles are recorded
+              Only the addresses on this list can sign in. Roles are recorded
               but not enforced yet.
             </span>
+            <button id="new-user" class="btn-primary inline">+ Add user</button>
           </div>
+
+          <!-- Add-user form, revealed by the button above -->
+          <div class="inline-form" id="new-user-form" hidden>
+            <div class="inline-form-grid">
+              <label>Email address
+                <input type="email" id="nu-email" placeholder="name@battag.com"
+                       autocomplete="off" />
+              </label>
+              <label>Name <span class="opt">optional</span>
+                <input type="text" id="nu-name" autocomplete="off" />
+              </label>
+              <label>Permission level
+                <select id="nu-role"></select>
+              </label>
+            </div>
+            <div class="inline-form-error" id="nu-error" hidden></div>
+            <div class="inline-form-actions">
+              <button type="button" class="btn-ghost" id="nu-cancel">Cancel</button>
+              <button type="button" class="btn-primary" id="nu-save">Add user</button>
+            </div>
+          </div>
+
           <div class="table-wrap">
             <table class="bids user-table">
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Sign-in</th>
-                  <th>Method</th>
-                  <th>First signed in</th>
+                  <th>Email address</th>
+                  <th>Status</th>
+                  <th>Added</th>
                   <th>Last active</th>
                   <th>Permission level</th>
                   <th class="col-status">Access</th>
@@ -294,7 +467,9 @@
               <tbody id="user-rows"></tbody>
             </table>
           </div>
-          <div id="user-empty" class="empty">No users yet.</div>
+          <div id="user-empty" class="empty">
+            No users yet — add an address to let someone in.
+          </div>
         </section>
        </div>
       </div>
@@ -582,6 +757,12 @@
     <!-- Companies already bid to, for the pricing form -->
     <datalist id="dl-quote-company"></datalist>
 
+    <!-- Contacts + activities pickers -->
+    <datalist id="dl-contact-company"></datalist>
+    <datalist id="dl-activity-type"></datalist>
+    <datalist id="dl-activity-opp"></datalist>
+    <datalist id="dl-activity-contact"></datalist>
+
     <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -591,6 +772,9 @@
     <script src="dashboard.js"></script>
     <script src="reports.js"></script>
     <script src="companies.js"></script>
+    <script src="contacts.js"></script>
+    <script src="activities.js"></script>
+    <script src="calendar.js"></script>
     <script src="users.js"></script>
   </body>
 </html>

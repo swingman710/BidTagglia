@@ -1,9 +1,13 @@
 // ===========================================================================
 //  User directory (public.app_members) + the admin-only Users tab.
 //
-//  Everyone who reaches the dashboard is checked in: first sign-in creates
-//  their row, every later visit stamps "last active". Blocked members are
-//  bounced straight back out to the login page.
+//  The directory is an INVITE LIST. An admin adds someone's @battag.com
+//  address here first; only addresses on the list can reach the dashboard.
+//  Signing in never creates a row — an address that isn't on the list is
+//  turned away with "you haven't been added yet".
+//
+//  Every sign-in by a listed member stamps "last active" (and "first seen",
+//  the first time they take up their invite).
 //
 //  Only ADMIN_EMAIL sees the Users tab. Roles are stored and editable but not
 //  enforced anywhere yet — that's deliberate, wire them up when the rules are
@@ -26,8 +30,7 @@ const MEMBER_ROLES = ["Admin", "Admin Super User", "Super User", "User", "Test"]
     return !!id && id === ADMIN_EMAIL;
   }
 
-  // The key we store a person under: their org email, or their username when
-  // they came in through the manual fallback.
+  // The key we store a person under: their sign-in address, lower-cased.
   function identityOf(account) {
     if (!account) return null;
     return String(account.email || account.name || "").trim().toLowerCase() || null;
@@ -49,7 +52,7 @@ const MEMBER_ROLES = ["Admin", "Admin Super User", "Super User", "User", "Test"]
     const { data, error } = await sb
       .from(TABLE)
       .select("*")
-      .order("first_seen_at", { ascending: true });
+      .order("invited_at", { ascending: true });
     if (error) {
       console.error("Member load error:", error.message);
       return members;
@@ -58,10 +61,15 @@ const MEMBER_ROLES = ["Admin", "Admin Super User", "Super User", "User", "Test"]
     return members;
   }
 
-  // Create the row on first sign-in, otherwise refresh name + last active.
+  // Look someone up and stamp their visit. Returns:
+  //   { ok: true, member }   — on the list, let them in
+  //   { ok: false, reason: "not-invited" | "blocked" }
+  //   { ok: true, member: null, reason: "unreachable" } — directory is down
   async function checkIn(account) {
     const identity = identityOf(account);
-    if (!identity || typeof sb === "undefined") return null;
+    if (!identity || typeof sb === "undefined") {
+      return { ok: true, member: null, reason: "unreachable" };
+    }
 
     const { data: existing, error } = await sb
       .from(TABLE)
@@ -69,36 +77,19 @@ const MEMBER_ROLES = ["Admin", "Admin Super User", "Super User", "User", "Test"]
       .eq("identity", identity)
       .maybeSingle();
 
+    // A Supabase outage must never lock the org out of the app: if we can't
+    // read the directory at all we let people through. That's different from
+    // reading it successfully and finding no row, which is a real "no".
     if (error) {
       console.error("Check-in lookup failed:", error.message);
-      return null;
+      return { ok: true, member: null, reason: "unreachable" };
     }
 
-    if (!existing) {
-      const row = {
-        identity,
-        name: account.name || identity,
-        email: account.email || null,
-        source: account.source === "manual" ? "manual" : "microsoft",
-        role: identity === ADMIN_EMAIL ? "Admin" : "User",
-      };
-      const { data: created, error: insErr } = await sb
-        .from(TABLE)
-        .insert(row)
-        .select()
-        .maybeSingle();
-      if (insErr) {
-        console.error("Could not add member:", insErr.message);
-        return null;
-      }
-      return created;
-    }
-
-    // Blocked members don't get their timestamp refreshed — the last active
-    // date should stay at their last real visit.
-    if (existing.blocked) return existing;
+    if (!existing) return { ok: false, reason: "not-invited" };
+    if (existing.blocked === true) return { ok: false, reason: "blocked" };
 
     const patch = { last_active_at: new Date().toISOString() };
+    if (!existing.first_seen_at) patch.first_seen_at = patch.last_active_at;
     if (account.name && account.name !== existing.name) patch.name = account.name;
     if (account.email && account.email !== existing.email) patch.email = account.email;
 
@@ -110,9 +101,9 @@ const MEMBER_ROLES = ["Admin", "Admin Super User", "Super User", "User", "Test"]
       .maybeSingle();
     if (updErr) {
       console.error("Could not update member:", updErr.message);
-      return existing;
+      return { ok: true, member: existing };
     }
-    return updated || existing;
+    return { ok: true, member: updated || existing };
   }
 
   async function setRole(id, role) {
@@ -125,6 +116,111 @@ const MEMBER_ROLES = ["Admin", "Admin Super User", "Super User", "User", "Test"]
     const { error } = await sb.from(TABLE).update({ blocked }).eq("id", id);
     if (error) console.error("Could not change access:", error.message);
     await renderUsers();
+  }
+
+  async function removeMember(member) {
+    const who = member.name || member.identity;
+    if (!confirm(`Remove ${who}? They won't be able to sign in again.`)) return;
+    const { error } = await sb.from(TABLE).delete().eq("id", member.id);
+    if (error) {
+      alert("Could not remove user: " + error.message);
+      return;
+    }
+    await renderUsers();
+  }
+
+  async function addMember({ email, name, role }) {
+    const identity = email.trim().toLowerCase();
+    const { error } = await sb.from(TABLE).insert({
+      identity,
+      email: identity,
+      name: name.trim() || null,
+      role,
+      invited_by: me ? me.identity : null,
+      first_seen_at: null,
+      last_active_at: null,
+    });
+    if (error) {
+      // 23505 = unique violation on `identity`.
+      alert(
+        error.code === "23505"
+          ? `${identity} is already on the list.`
+          : "Could not add user: " + error.message
+      );
+      return false;
+    }
+    return true;
+  }
+
+  // ---------- Add-user form ----------
+
+  function addFormFields() {
+    return {
+      email: $("nu-email"),
+      name: $("nu-name"),
+      role: $("nu-role"),
+      error: $("nu-error"),
+    };
+  }
+
+  function showAddForm(show) {
+    const form = $("new-user-form");
+    if (!form) return;
+    form.hidden = !show;
+    const f = addFormFields();
+    if (show) {
+      f.email.value = "";
+      f.name.value = "";
+      f.role.value = "User";
+      f.error.hidden = true;
+      f.email.focus();
+    }
+  }
+
+  async function submitAddForm() {
+    const f = addFormFields();
+    const email = f.email.value.trim().toLowerCase();
+
+    const fail = (msg) => {
+      f.error.textContent = msg;
+      f.error.hidden = false;
+      f.email.focus();
+    };
+
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      fail("Enter a full email address.");
+      return;
+    }
+    // Anyone outside the org can't get past the tenant check at sign-in, so
+    // adding them here would only look like it worked.
+    if (!BBAuth.isOrgAccount(email)) {
+      fail(`Only @${BBAuth.orgDomain} addresses can sign in.`);
+      return;
+    }
+
+    if (await addMember({ email, name: f.name.value, role: f.role.value })) {
+      showAddForm(false);
+      await renderUsers();
+    }
+  }
+
+  function buildAddForm() {
+    const roleSel = $("nu-role");
+    if (roleSel && !roleSel.options.length) {
+      for (const role of MEMBER_ROLES) {
+        const opt = document.createElement("option");
+        opt.value = role;
+        opt.textContent = role;
+        roleSel.appendChild(opt);
+      }
+      roleSel.value = "User";
+    }
+    $("new-user")?.addEventListener("click", () => showAddForm(true));
+    $("nu-cancel")?.addEventListener("click", () => showAddForm(false));
+    $("nu-save")?.addEventListener("click", submitAddForm);
+    $("nu-email")?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submitAddForm();
+    });
   }
 
   // ---------- Users table ----------
@@ -144,7 +240,7 @@ const MEMBER_ROLES = ["Admin", "Admin Super User", "Super User", "User", "Test"]
       if (m.blocked) tr.className = "is-blocked";
 
       const nameTd = document.createElement("td");
-      nameTd.textContent = m.name || m.identity;
+      nameTd.textContent = m.name || "—";
       if (self) {
         const you = document.createElement("span");
         you.className = "you-pill";
@@ -155,11 +251,23 @@ const MEMBER_ROLES = ["Admin", "Admin Super User", "Super User", "User", "Test"]
       const idTd = document.createElement("td");
       idTd.textContent = m.email || m.identity;
 
-      const srcTd = document.createElement("td");
-      srcTd.textContent = m.source === "manual" ? "Username" : "Microsoft";
+      // Someone who has never signed in is still just an invitation.
+      const stateTd = document.createElement("td");
+      const state = document.createElement("span");
+      if (m.blocked) {
+        state.className = "status lost";
+        state.textContent = "Blocked";
+      } else if (m.first_seen_at) {
+        state.className = "status won";
+        state.textContent = "Active";
+      } else {
+        state.className = "status hold";
+        state.textContent = "Invited";
+      }
+      stateTd.appendChild(state);
 
-      const firstTd = document.createElement("td");
-      firstTd.textContent = formatStamp(m.first_seen_at);
+      const addedTd = document.createElement("td");
+      addedTd.textContent = formatStamp(m.invited_at);
 
       const lastTd = document.createElement("td");
       lastTd.textContent = formatStamp(m.last_active_at);
@@ -181,33 +289,46 @@ const MEMBER_ROLES = ["Admin", "Admin Super User", "Super User", "User", "Test"]
 
       const accessTd = document.createElement("td");
       accessTd.className = "col-status";
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = m.blocked ? "btn-ghost sm" : "btn-ghost sm danger";
-      btn.textContent = m.blocked ? "Unblock" : "Block";
-      btn.disabled = self;
-      btn.title = self ? "You can't block yourself" : "";
-      btn.addEventListener("click", () => setBlocked(m.id, !m.blocked));
-      const state = document.createElement("span");
-      state.className = `status ${m.blocked ? "lost" : "won"}`;
-      state.textContent = m.blocked ? "Blocked" : "Active";
-      accessTd.append(state, btn);
+      const block = document.createElement("button");
+      block.type = "button";
+      block.className = m.blocked ? "btn-ghost sm" : "btn-ghost sm danger";
+      block.textContent = m.blocked ? "Unblock" : "Block";
+      block.disabled = self;
+      block.title = self ? "You can't block yourself" : "";
+      block.addEventListener("click", () => setBlocked(m.id, !m.blocked));
 
-      tr.append(nameTd, idTd, srcTd, firstTd, lastTd, roleTd, accessTd);
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "btn-ghost sm danger";
+      remove.textContent = "Remove";
+      remove.disabled = self;
+      remove.title = self ? "You can't remove yourself" : "";
+      remove.addEventListener("click", () => removeMember(m));
+
+      accessTd.append(block, remove);
+
+      tr.append(nameTd, idTd, stateTd, addedTd, lastTd, roleTd, accessTd);
       tbody.appendChild(tr);
     }
   }
 
-  // ---------- Blocked screen ----------
+  // ---------- Turned-away screen ----------
 
-  function showBlocked(account) {
+  function showDenied(account, reason) {
+    const who = account.name || account.email || "Your account";
+    const body =
+      reason === "blocked"
+        ? `${who} no longer has access to Battag Bid. Contact your ` +
+          "administrator if you think this is a mistake."
+        : `${who} hasn't been added to Battag Bid yet. Ask your ` +
+          "administrator to add your address to the user list.";
+
     const overlay = document.createElement("div");
     overlay.className = "blocked-overlay";
     overlay.innerHTML =
       '<div class="blocked-card">' +
-      "<h2>Access blocked</h2>" +
-      `<p>${account.name || "Your account"} no longer has access to Battag Bid. ` +
-      "Contact your administrator if you think this is a mistake.</p>" +
+      `<h2>${reason === "blocked" ? "Access blocked" : "No access yet"}</h2>` +
+      `<p>${body}</p>` +
       '<button type="button" class="btn-primary" id="blocked-out">Sign out</button>' +
       "</div>";
     document.body.appendChild(overlay);
@@ -222,19 +343,20 @@ const MEMBER_ROLES = ["Admin", "Admin Super User", "Super User", "User", "Test"]
     const account = await BBAuth.requireAuth();
     if (!account) return; // requireAuth is redirecting to index.html
 
-    me = await checkIn(account);
+    const result = await checkIn(account);
+    me = result.member;
 
-    // Only an explicit block keeps someone out. If the directory can't be
-    // reached at all, checkIn returns null and the person still gets in —
-    // a Supabase hiccup must never lock the org out of the app.
-    if (me && me.blocked === true) {
-      showBlocked(account);
+    // The admin is never turned away by their own invite list — a missing or
+    // mistakenly-deleted row must not lock them out of the tab that fixes it.
+    if (!result.ok && !isAdmin(account)) {
+      showDenied(account, result.reason);
       return;
     }
 
     if (isAdmin(account)) {
       const tab = document.querySelector('.nav-tab[data-view="users"]');
       if (tab) tab.hidden = false;
+      buildAddForm();
       onViewOpen("users", renderUsers);
     }
   })();

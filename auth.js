@@ -1,5 +1,7 @@
 // ===========================================================================
-//  Microsoft Entra (Azure AD) sign-in via MSAL — org-only SSO.
+//  Microsoft Entra (Azure AD) sign-in via MSAL — org-only SSO. This is the
+//  only way into the app; the username/password fallback was removed when the
+//  Users tab became an invite list (see users.js).
 //
 //  Uses a TENANT-SPECIFIC authority so only members of your tenant can sign
 //  in. Every page that needs auth loads msal-browser + this file, then calls
@@ -144,7 +146,6 @@ const AUTH_CONFIG = {
   }
 
   async function signOut() {
-    clearManual();
     const app = await ready();
     if (app.getActiveAccount()) {
       await app.logoutRedirect();
@@ -153,49 +154,15 @@ const AUTH_CONFIG = {
     }
   }
 
-  // ---- Manual (username/password) fallback -------------------------------
-  // Credentials live in Supabase (table app_users, bcrypt-hashed). We verify
-  // via the verify_login() RPC — the table itself is not readable by the
-  // public anon key, so passwords never reach the browser. See supabase_users.sql.
-
-  const MANUAL_KEY = "battag_manual_user";
-
-  async function manualSignIn(username, password) {
-    if (typeof sb === "undefined") {
-      console.error("Supabase client not loaded; manual sign-in unavailable.");
-      return false;
-    }
-    const { data, error } = await sb.rpc("verify_login", {
-      p_username: username,
-      p_password: password,
-    });
-    if (error) {
-      console.error("Manual sign-in error:", error.message);
-      return false;
-    }
-    if (data === true) {
-      sessionStorage.setItem(MANUAL_KEY, username);
-      return true;
-    }
-    return false;
-  }
-
-  function getManualUser() {
-    return sessionStorage.getItem(MANUAL_KEY);
-  }
-
-  function clearManual() {
-    sessionStorage.removeItem(MANUAL_KEY);
-  }
-
   async function getAccount() {
     const app = await ready();
     return app.getActiveAccount();
   }
 
-  // For gated pages: bounce to the login screen if not signed in by either
-  // method. Returns a normalized identity ({ name, email, source }), or null
-  // if redirecting. `email` is null for manual sign-ins (they have no UPN).
+  // For gated pages: bounce to the login screen if not signed in. Returns a
+  // normalized identity ({ name, email, source }), or null if redirecting.
+  // Being signed in is not the same as being allowed in — users.js checks the
+  // address against the invite list on top of this.
   async function requireAuth() {
     const account = await getAccount();
     if (account) {
@@ -205,9 +172,6 @@ const AUTH_CONFIG = {
         source: "microsoft",
       };
     }
-
-    const manual = getManualUser();
-    if (manual) return { name: manual, email: null, source: "manual" };
 
     window.location.href = "index.html";
     return null;
@@ -220,8 +184,6 @@ const AUTH_CONFIG = {
     signOut,
     getAccount,
     requireAuth,
-    manualSignIn,
-    getManualUser,
     isOrgAccount,
     getLastError,
     clearLastError,

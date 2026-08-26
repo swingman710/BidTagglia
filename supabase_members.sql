@@ -2,9 +2,13 @@
 --  BidTagglia: app members / user directory.
 --  Run in Supabase -> SQL Editor. Safe to re-run.
 --
---  Every person who signs in (Microsoft SSO or the manual fallback) gets a row
---  the first time they land on the dashboard. `identity` is the key: the org
---  email for SSO users, the username for manual ones.
+--  The directory is an INVITE LIST: an admin adds someone's @battag.com address
+--  on the Users tab, and only addresses on this table can sign in. Signing in
+--  no longer creates a row — a person with no row is turned away.
+--
+--  `identity` is the key: the lower-cased email the person signs in with.
+--  first_seen_at / last_active_at are null until they actually sign in, which
+--  is how an invite that hasn't been taken up yet shows as "Invited".
 --
 --  `role` is recorded but NOT yet enforced anywhere in the app — the only
 --  permission that does anything today is the hard-coded admin email in
@@ -26,6 +30,19 @@ create table if not exists public.app_members (
   last_active_at timestamptz not null default now()
 );
 
+-- Invite metadata: when the row was added and by whom.
+alter table public.app_members
+  add column if not exists invited_at timestamptz not null default now();
+alter table public.app_members
+  add column if not exists invited_by text;
+
+-- An invited person hasn't signed in yet, so these have to be allowed to be
+-- empty. Rows created before the invite list existed keep their timestamps.
+alter table public.app_members alter column first_seen_at drop not null;
+alter table public.app_members alter column first_seen_at drop default;
+alter table public.app_members alter column last_active_at drop not null;
+alter table public.app_members alter column last_active_at drop default;
+
 create index if not exists app_members_identity_idx
   on public.app_members(identity);
 
@@ -34,8 +51,8 @@ drop policy if exists "anon full access members dir" on public.app_members;
 create policy "anon full access members dir" on public.app_members
   for all to anon using (true) with check (true);
 
--- Seed the owner as an admin so the Users tab exists before anyone else
--- signs in. name/email fill themselves in on the next sign-in.
+-- Seed the owner as an admin. Without this the invite list would be empty and
+-- nobody — including the admin — could get in.
 insert into public.app_members (identity, email, role)
 values ('trossi@battag.com', 'trossi@battag.com', 'Admin')
 on conflict (identity) do update set role = 'Admin', blocked = false;

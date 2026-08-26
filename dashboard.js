@@ -324,18 +324,21 @@ function renderStats(opps) {
 
 function render() {
   const opps = loadOpps();
-
-  renderStats(opps);
-  count.textContent = opps.length;
-
   const query = search.value.trim().toLowerCase();
-  const visible = query
-    ? opps.filter((o) =>
-        [o.name, o.division, o.leadEstimator, o.ownerCustomer].some((f) =>
-          (f || "").toLowerCase().includes(query)
-        )
-      )
-    : opps;
+
+  const visible = opps.filter((o) => {
+    if (statusFilter.size && !statusFilter.has(o.status || "Unspecified")) {
+      return false;
+    }
+    if (!query) return true;
+    return [o.name, o.division, o.leadEstimator, o.ownerCustomer].some((f) =>
+      (f || "").toLowerCase().includes(query)
+    );
+  });
+
+  // The stat strip describes whatever the table is showing.
+  renderStats(visible);
+  count.textContent = visible.length;
 
   rows.innerHTML = "";
 
@@ -439,10 +442,50 @@ function renderCharts(opps) {
   if (typeof Chart !== "undefined") renderEstimatorChart(opps);
 }
 
+// Statuses picked by clicking funnel segments. Empty = show everything.
+const statusFilter = new Set();
+
+function toggleStatusFilter(status) {
+  if (statusFilter.has(status)) statusFilter.delete(status);
+  else statusFilter.add(status);
+  renderFunnel(loadOpps());
+  render();
+}
+
+function clearStatusFilter() {
+  statusFilter.clear();
+  renderFunnel(loadOpps());
+  render();
+}
+
+// The "showing X, Y · Clear" line under the funnel.
+function renderFunnelFilter() {
+  const bar = document.getElementById("funnel-filter");
+  if (!bar) return;
+  bar.hidden = statusFilter.size === 0;
+  if (bar.hidden) {
+    bar.innerHTML = "";
+    return;
+  }
+  bar.innerHTML = "";
+  const label = document.createElement("span");
+  label.textContent = `Showing ${[...statusFilter].join(", ")}`;
+  const clear = document.createElement("button");
+  clear.type = "button";
+  clear.className = "funnel-clear";
+  clear.textContent = "Clear";
+  clear.addEventListener("click", clearStatusFilter);
+  bar.append(label, clear);
+}
+
 // Bid pipeline funnel: one segment per status, sized by total project value.
+// Always drawn from every bid — the segments are the filter control, so they
+// can't disappear when you pick one. Selected segments are outlined and the
+// rest dim.
 function renderFunnel(opps) {
   const el = document.getElementById("funnel");
   if (!el) return;
+  renderFunnelFilter();
 
   const totals = {};
   for (const o of opps) {
@@ -468,6 +511,8 @@ function renderFunnel(opps) {
   const segH = 100 / n;
   const widthPct = (v) => minW + (100 - minW) * (v / max);
 
+  const filtering = statusFilter.size > 0;
+
   let polys = "";
   let labels = "";
   segs.forEach((seg, i) => {
@@ -476,19 +521,34 @@ function renderFunnel(opps) {
     const y0 = i * segH + gap / 2;
     const y1 = (i + 1) * segH - gap / 2;
     const color = STATUS_COLORS[seg.status] || "#94a3b8";
+    const picked = statusFilter.has(seg.status);
+    const cls =
+      "funnel-seg" + (picked ? " is-picked" : filtering ? " is-dim" : "");
+    const verb = picked ? "Remove" : "Filter by";
     polys +=
-      `<polygon points="${(100 - topW) / 2},${y0} ${(100 + topW) / 2},${y0} ` +
+      `<polygon class="${cls}" data-status="${escAttr(seg.status)}" ` +
+      `points="${(100 - topW) / 2},${y0} ${(100 + topW) / 2},${y0} ` +
       `${(100 + botW) / 2},${y1} ${(100 - botW) / 2},${y1}" fill="${color}">` +
-      `<title>${seg.status}: ${currency.format(seg.value)}</title></polygon>`;
+      `<title>${escAttr(seg.status)}: ${currency.format(seg.value)} — click to ` +
+      `${verb.toLowerCase()}</title></polygon>`;
     const top = ((i + 0.5) / n) * 100;
     labels +=
-      `<div class="funnel-label" style="top:${top}%">` +
-      `${seg.status} · ${currency.format(seg.value)}</div>`;
+      `<div class="funnel-label${picked ? " is-picked" : filtering ? " is-dim" : ""}" ` +
+      `style="top:${top}%">${escAttr(seg.status)} · ${currency.format(seg.value)}</div>`;
   });
 
   el.innerHTML =
     `<svg viewBox="0 0 100 100" preserveAspectRatio="none">${polys}</svg>` +
     `<div class="funnel-labels">${labels}</div>`;
+
+  for (const poly of el.querySelectorAll(".funnel-seg")) {
+    poly.addEventListener("click", () => toggleStatusFilter(poly.dataset.status));
+  }
+}
+
+// Statuses are free text on the way in, so they can't go straight into markup.
+function escAttr(value) {
+  return String(value ?? "").replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
 // Line chart: # of active opportunities per lead estimator.
@@ -1290,6 +1350,18 @@ async function updatePricingStatus(id, status) {
   renderPricing();
 }
 
+async function updatePricing(id, patch) {
+  const { error } = await sb.from(PRICING_TABLE).update(patch).eq("id", id);
+  if (error) {
+    alert("Could not save price: " + error.message);
+    return false;
+  }
+  // The price or its sent-on date may have changed which quote counts as the
+  // most recent proposal, so project values need recomputing.
+  pricingDirty = true;
+  return true;
+}
+
 async function deletePricing(id) {
   if (!confirm("Delete this price quote?")) return;
   const { error } = await sb.from(PRICING_TABLE).delete().eq("id", id);
@@ -1302,6 +1374,10 @@ async function deletePricing(id) {
 }
 
 const QUOTE_STATUSES = ["Draft", "Sent", "Lost", "Withdrawn"];
+
+// Where the add/edit quote form is mounted in the Pricing tab (set by
+// renderPricing, read by each row's Edit button).
+let quoteFormMount = null;
 
 function renderQuoteRow(q) {
   const tr = document.createElement("tr");
@@ -1335,6 +1411,17 @@ function renderQuoteRow(q) {
     b.addEventListener("click", () => updatePricingStatus(q.id, s));
     actions.appendChild(b);
   }
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = "status-btn";
+  edit.textContent = "Edit";
+  edit.addEventListener("click", () => {
+    if (!quoteFormMount) return;
+    showQuoteForm(q.type, quoteFormMount, q);
+    quoteFormMount.scrollIntoView({ block: "nearest" });
+  });
+  actions.appendChild(edit);
+
   const del = document.createElement("button");
   del.type = "button";
   del.className = "status-btn danger";
@@ -1392,13 +1479,16 @@ function renderQuoteGroup(label, quotes) {
   return det;
 }
 
-function showQuoteForm(type, mount) {
+// Add a price, or edit one: pass the existing quote as `quote` and the form
+// opens prefilled and saves an update instead of an insert.
+function showQuoteForm(type, mount, quote) {
   const labelText = type === "proposal" ? "Proposal" : "Budgetary";
+  const editing = !!quote;
   mount.innerHTML = "";
   const card = document.createElement("div");
   card.className = "quote-form";
   card.innerHTML = `
-    <h4>Add ${labelText} Price</h4>
+    <h4>${editing ? "Edit" : "Add"} ${labelText} Price</h4>
     <div class="quote-grid">
       <label>Company
         <input type="text" data-f="company" list="dl-quote-company" autocomplete="off"
@@ -1410,12 +1500,21 @@ function showQuoteForm(type, mount) {
     </div>
     <div class="quote-form-actions">
       <button type="button" class="btn-ghost" data-act="cancel">Cancel</button>
-      <button type="button" class="btn-primary" data-act="save">Save price</button>
+      <button type="button" class="btn-primary" data-act="save">
+        ${editing ? "Save changes" : "Save price"}
+      </button>
     </div>`;
   mount.appendChild(card);
   fillDatalist("dl-quote-company", knownCompanies());
 
   const field = (f) => card.querySelector(`[data-f="${f}"]`);
+  if (editing) {
+    field("company").value = quote.company || "";
+    field("price").value = quote.price ?? "";
+    field("price_sent_on").value = quote.price_sent_on || "";
+    field("notes").value = quote.notes || "";
+  }
+
   card.querySelector('[data-act="cancel"]').addEventListener("click", () => {
     mount.innerHTML = "";
   });
@@ -1428,15 +1527,23 @@ function showQuoteForm(type, mount) {
     }
     rememberCompany(company);
     const priceRaw = field("price").value;
-    await addPricing({
-      opportunity_id: String(detailOpp.id),
-      type,
+    const values = {
       company,
       price: priceRaw === "" ? null : Number(priceRaw),
       price_sent_on: field("price_sent_on").value || null,
       notes: field("notes").value.trim() || null,
-      status: "Draft",
-    });
+    };
+
+    if (editing) {
+      if (!(await updatePricing(quote.id, values))) return;
+    } else {
+      await addPricing({
+        opportunity_id: String(detailOpp.id),
+        type,
+        ...values,
+        status: "Draft",
+      });
+    }
     mount.innerHTML = "";
     renderPricing();
   });
@@ -1463,6 +1570,9 @@ async function renderPricing() {
 
   const mount = document.createElement("div");
   pane.appendChild(mount);
+  // Row-level Edit buttons render below this, so they reach the form through
+  // the shared mount rather than being threaded the element.
+  quoteFormMount = mount;
   propBtn.addEventListener("click", () => showQuoteForm("proposal", mount));
   budBtn.addEventListener("click", () => showQuoteForm("budgetary", mount));
 
