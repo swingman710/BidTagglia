@@ -2290,39 +2290,6 @@ table.bids tbody tr.bid-row {
   padding: 1px 7px;
 }
 
-/* Shown instead of the app when a blocked member signs in */
-.blocked-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  background: rgba(42, 48, 64, 0.55);
-  display: grid;
-  place-items: center;
-}
-
-.blocked-card {
-  background: var(--surface);
-  border-radius: 8px;
-  box-shadow: var(--shadow-lg);
-  padding: 28px 32px;
-  max-width: 420px;
-  text-align: center;
-}
-
-.blocked-card h2 {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ink);
-  margin-bottom: 10px;
-}
-
-.blocked-card p {
-  font-size: 13px;
-  color: var(--text);
-  line-height: 1.6;
-  margin-bottom: 18px;
-}
-
 /* Destructive action in a modal footer — sits opposite Cancel/Save */
 .btn-danger {
   font-family: var(--sans);

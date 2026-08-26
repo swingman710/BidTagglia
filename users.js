@@ -1,40 +1,22 @@
 // ===========================================================================
-//  User directory (public.app_members) + the admin-only Users tab.
+//  The admin-only Users tab: the UI for the invite list.
 //
-//  The directory is an INVITE LIST. An admin adds someone's @battag.com
-//  address here first; only addresses on the list can reach the dashboard.
-//  Signing in never creates a row — an address that isn't on the list is
-//  turned away with "you haven't been added yet".
+//  The list itself is public.app_members and the gate that enforces it lives
+//  in access.js — this file only edits it. An admin adds someone's
+//  @battag.com address here; anyone not on the list is signed out at the door
+//  and never reaches the dashboard.
 //
-//  Every sign-in by a listed member stamps "last active" (and "first seen",
-//  the first time they take up their invite).
-//
-//  Only ADMIN_EMAIL sees the Users tab. Roles are stored and editable but not
+//  Only ADMIN_EMAIL sees this tab. Roles are stored and editable but not
 //  enforced anywhere yet — that's deliberate, wire them up when the rules are
 //  decided. See supabase_members.sql for the table.
 // ===========================================================================
 
-const ADMIN_EMAIL = "trossi@battag.com";
-
-const MEMBER_ROLES = ["Admin", "Admin Super User", "Super User", "User", "Test"];
-
 (() => {
-  const TABLE = "app_members";
+  const TABLE = MEMBERS_DIR_TABLE;
   const $ = (id) => document.getElementById(id);
 
   let members = [];
   let me = null; // this session's app_members row
-
-  function isAdmin(account) {
-    const id = identityOf(account);
-    return !!id && id === ADMIN_EMAIL;
-  }
-
-  // The key we store a person under: their sign-in address, lower-cased.
-  function identityOf(account) {
-    if (!account) return null;
-    return String(account.email || account.name || "").trim().toLowerCase() || null;
-  }
 
   function formatStamp(value) {
     if (!value) return "—";
@@ -59,51 +41,6 @@ const MEMBER_ROLES = ["Admin", "Admin Super User", "Super User", "User", "Test"]
     }
     members = data || [];
     return members;
-  }
-
-  // Look someone up and stamp their visit. Returns:
-  //   { ok: true, member }   — on the list, let them in
-  //   { ok: false, reason: "not-invited" | "blocked" }
-  //   { ok: true, member: null, reason: "unreachable" } — directory is down
-  async function checkIn(account) {
-    const identity = identityOf(account);
-    if (!identity || typeof sb === "undefined") {
-      return { ok: true, member: null, reason: "unreachable" };
-    }
-
-    const { data: existing, error } = await sb
-      .from(TABLE)
-      .select("*")
-      .eq("identity", identity)
-      .maybeSingle();
-
-    // A Supabase outage must never lock the org out of the app: if we can't
-    // read the directory at all we let people through. That's different from
-    // reading it successfully and finding no row, which is a real "no".
-    if (error) {
-      console.error("Check-in lookup failed:", error.message);
-      return { ok: true, member: null, reason: "unreachable" };
-    }
-
-    if (!existing) return { ok: false, reason: "not-invited" };
-    if (existing.blocked === true) return { ok: false, reason: "blocked" };
-
-    const patch = { last_active_at: new Date().toISOString() };
-    if (!existing.first_seen_at) patch.first_seen_at = patch.last_active_at;
-    if (account.name && account.name !== existing.name) patch.name = account.name;
-    if (account.email && account.email !== existing.email) patch.email = account.email;
-
-    const { data: updated, error: updErr } = await sb
-      .from(TABLE)
-      .update(patch)
-      .eq("id", existing.id)
-      .select()
-      .maybeSingle();
-    if (updErr) {
-      console.error("Could not update member:", updErr.message);
-      return { ok: true, member: existing };
-    }
-    return { ok: true, member: updated || existing };
   }
 
   async function setRole(id, role) {
@@ -312,54 +249,20 @@ const MEMBER_ROLES = ["Admin", "Admin Super User", "Super User", "User", "Test"]
     }
   }
 
-  // ---------- Turned-away screen ----------
-
-  function showDenied(account, reason) {
-    const who = account.name || account.email || "Your account";
-    const body =
-      reason === "blocked"
-        ? `${who} no longer has access to Battag Bid. Contact your ` +
-          "administrator if you think this is a mistake."
-        : `${who} hasn't been added to Battag Bid yet. Ask your ` +
-          "administrator to add your address to the user list.";
-
-    const overlay = document.createElement("div");
-    overlay.className = "blocked-overlay";
-    overlay.innerHTML =
-      '<div class="blocked-card">' +
-      `<h2>${reason === "blocked" ? "Access blocked" : "No access yet"}</h2>` +
-      `<p>${body}</p>` +
-      '<button type="button" class="btn-primary" id="blocked-out">Sign out</button>' +
-      "</div>";
-    document.body.appendChild(overlay);
-    document.getElementById("blocked-out").addEventListener("click", () => {
-      BBAuth.signOut();
-    });
-  }
-
   // ---------- Boot ----------
+  // access.js has already decided whether this person gets in at all; by the
+  // time its gate resolves, the only question left is whether to show the tab.
 
   (async () => {
-    const account = await BBAuth.requireAuth();
-    if (!account) return; // requireAuth is redirecting to index.html
+    const access = await BBAccess.ready;
+    me = access.member;
+    if (!access.isAdmin) return;
 
-    const result = await checkIn(account);
-    me = result.member;
-
-    // The admin is never turned away by their own invite list — a missing or
-    // mistakenly-deleted row must not lock them out of the tab that fixes it.
-    if (!result.ok && !isAdmin(account)) {
-      showDenied(account, result.reason);
-      return;
-    }
-
-    if (isAdmin(account)) {
-      const tab = document.querySelector('.nav-tab[data-view="users"]');
-      if (tab) tab.hidden = false;
-      buildAddForm();
-      onViewOpen("users", renderUsers);
-    }
+    const tab = document.querySelector('.nav-tab[data-view="users"]');
+    if (tab) tab.hidden = false;
+    buildAddForm();
+    onViewOpen("users", renderUsers);
   })();
 
-  window.BBUsers = { checkIn, fetchMembers, renderUsers, isAdmin, ADMIN_EMAIL, MEMBER_ROLES };
+  window.BBUsers = { fetchMembers, renderUsers, MEMBER_ROLES };
 })();

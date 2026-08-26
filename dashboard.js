@@ -1,7 +1,8 @@
-// Require a Microsoft sign-in; bounce back to login if not signed in.
+// Wait for the gate (access.js): signed in AND on the invite list. It never
+// resolves for anyone else — they're being signed out and sent back to the
+// login page — so nothing below this line runs for them.
 (async () => {
-  const account = await BBAuth.requireAuth();
-  if (!account) return; // requireAuth is redirecting to index.html
+  const { account } = await BBAccess.ready;
 
   // Personalize the brand-header user chip.
   const name = account.name || account.username || "user";
@@ -421,7 +422,10 @@ function showView(view) {
   for (const section of document.querySelectorAll("main .view")) {
     section.hidden = section.id !== `view-${view}`;
   }
-  if (VIEW_HOOKS[view]) VIEW_HOOKS[view]();
+  // Every hook loads data. None of them run for someone the invite list turned
+  // away, even if they've forced the hidden page back into view — the tabs
+  // then show nothing, because nothing was ever fetched.
+  if (VIEW_HOOKS[view] && BBAccess.granted) VIEW_HOOKS[view]();
 }
 
 // Re-run whichever view is open (after the data behind it changed).
@@ -1826,4 +1830,6 @@ oppForm.addEventListener("submit", (e) => {
 
 search.addEventListener("input", render);
 
-refreshOpps();
+// The first and only unprompted read of bid data — held behind the gate so an
+// uninvited account never pulls it into the browser at all.
+BBAccess.ready.then(refreshOpps);

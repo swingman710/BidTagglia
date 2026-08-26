@@ -195,8 +195,9 @@ const COMPANY_INDUSTRIES = [
   onViewOpen("companies", renderCompanies);
 
   // Load once at start-up so saved-but-never-quoted companies show up in the
-  // quote form's suggestions too.
-  fetchCompanies();
+  // quote form's suggestions too — but only once the gate in access.js has
+  // confirmed this person is allowed to see company data at all.
+  BBAccess.ready.then(fetchCompanies);
 
   window.BBCompanies = { fetchCompanies, renderCompanies, saveCompany };
 })();

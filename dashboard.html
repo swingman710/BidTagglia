@@ -11,6 +11,19 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
+
+    <!-- Hide the app until access.js confirms this person is on the invite
+         list. Set here, before any markup is parsed, so nothing is ever
+         painted for someone who turns out not to have access. Fails closed:
+         if the scripts never run, the page stays blank. -->
+    <style>
+      html.gate-pending body {
+        display: none;
+      }
+    </style>
+    <script>
+      document.documentElement.classList.add("gate-pending");
+    </script>
   </head>
   <body>
     <!-- White brand header -->
@@ -768,6 +781,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="auth.js"></script>
     <script src="supabase.js"></script>
+    <!-- The gate. Must come before every script that loads or renders data;
+         they all wait on BBAccess.ready. -->
+    <script src="access.js"></script>
     <script src="data.js"></script>
     <script src="dashboard.js"></script>
     <script src="reports.js"></script>
