@@ -6,11 +6,16 @@
 #  so on a list that already holds 6,500 bids, creating them can fail. On an
 #  empty list it's instant.
 #
-#  Setup (once):
-#      Install-Module PnP.PowerShell -Scope CurrentUser
+#  Setup (once), in pwsh:
+#      Install-Module PnP.PowerShell -Scope CurrentUser -Force
 #
-#  Then:
-#      ./sharepoint_bids_list.ps1
+#      # PnP no longer ships a shared sign-in app, so register your own. This
+#      # needs an Entra admin to consent, and prints a ClientId — keep it.
+#      Register-PnPEntraIDAppForInteractiveLogin `
+#          -ApplicationName "PnP PowerShell" -Tenant battag.com -Interactive
+#
+#  Then, each time:
+#      ./sharepoint_bids_list.ps1 -ClientId <the-client-id-from-above>
 #
 #  It signs you in interactively as yourself — no secrets live in this file.
 #  Safe to re-run: existing columns are left alone, missing ones are added.
@@ -20,8 +25,15 @@
 #  would turn "Bid Due" into "Bid_x0020_Due".
 # ============================================================================
 
-$SiteUrl  = "https://battag.sharepoint.com/sites/battagbid"
-$ListName = "Bid Opportunities"
+param(
+  # From Register-PnPEntraIDAppForInteractiveLogin. Once you have it, you can
+  # paste it as the default here so you don't pass it every run.
+  [Parameter(Mandatory = $true)]
+  [string] $ClientId,
+
+  [string] $SiteUrl  = "https://battag.sharepoint.com/sites/battagbid",
+  [string] $ListName = "Bid Opportunities"
+)
 
 # ---------------------------------------------------------------------------
 #  Columns. Type is the SharePoint field type; Extra is applied afterwards.
@@ -95,7 +107,7 @@ $Indexed = @("bidDue", "status", "division", "leadEstimator", "internalBidNumber
 
 # ---------------------------------------------------------------------------
 
-Connect-PnPOnline -Url $SiteUrl -Interactive
+Connect-PnPOnline -Url $SiteUrl -Interactive -ClientId $ClientId
 
 $list = Get-PnPList -Identity $ListName -ErrorAction SilentlyContinue
 if (-not $list) {
