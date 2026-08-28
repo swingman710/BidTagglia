@@ -337,6 +337,116 @@ function renderStats(opps) {
   document.getElementById("stat-top").textContent = currency.format(top);
 }
 
+// How many rows the table draws at once. Filtering, sorting and the stat
+// strip all still run over every matching bid.
+const ROW_LIMIT = 1000;
+
+function renderRowLimitNote(shown, total) {
+  const note = document.getElementById("row-limit");
+  if (!note) return;
+  if (shown >= total) {
+    note.hidden = true;
+    return;
+  }
+  note.hidden = false;
+  note.textContent =
+    `Showing the first ${shown.toLocaleString()} of ${total.toLocaleString()} ` +
+    "— sort or filter to bring what you need to the top.";
+}
+
+// ---------- Hiding statuses ----------
+// Decided bids pile up — Lost, No Bid and Cancelled are most of the history
+// and almost never what you opened the dashboard to look at — so they start
+// hidden. The choice is remembered per browser.
+
+const DEFAULT_HIDDEN = ["Lost", "No Bid", "Cancelled"];
+const HIDDEN_KEY = "battag_hidden_statuses";
+
+function loadHidden() {
+  try {
+    const saved = localStorage.getItem(HIDDEN_KEY);
+    if (saved) return new Set(JSON.parse(saved));
+  } catch (e) {
+    // Storage disabled or holding something unparseable — fall back to the
+    // default rather than failing to render the table at all.
+    console.error("Could not read hidden statuses:", e);
+  }
+  return new Set(DEFAULT_HIDDEN);
+}
+
+const hiddenStatuses = loadHidden();
+
+function saveHidden() {
+  try {
+    localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hiddenStatuses]));
+  } catch (e) {
+    console.error("Could not save hidden statuses:", e);
+  }
+}
+
+// Every status the data actually uses, plus the standard list, so a status
+// nobody has used yet can still be un-hidden ahead of time.
+function allStatuses() {
+  const set = new Set(FIELD_LISTS.opportunityStatus);
+  for (const o of loadOpps()) set.add(o.status || "Unspecified");
+  return [...set];
+}
+
+function renderStatusMenu() {
+  const menu = document.getElementById("status-menu");
+  if (!menu) return;
+  menu.innerHTML = "";
+
+  for (const status of allStatuses()) {
+    const row = document.createElement("label");
+    row.className = "status-opt";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = !hiddenStatuses.has(status);
+    cb.addEventListener("change", () => {
+      if (cb.checked) hiddenStatuses.delete(status);
+      else hiddenStatuses.add(status);
+      saveHidden();
+      updateStatusButton();
+      render();
+    });
+    const pill = document.createElement("span");
+    pill.className = `status ${statusClass(status)}`;
+    pill.textContent = status;
+    row.append(cb, pill);
+    menu.appendChild(row);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "status-menu-actions";
+  for (const [label, fn] of [
+    ["Show all", () => hiddenStatuses.clear()],
+    ["Hide decided", () => DEFAULT_HIDDEN.forEach((s) => hiddenStatuses.add(s))],
+  ]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn-ghost sm";
+    b.textContent = label;
+    b.addEventListener("click", () => {
+      fn();
+      saveHidden();
+      renderStatusMenu();
+      updateStatusButton();
+      render();
+    });
+    actions.appendChild(b);
+  }
+  menu.appendChild(actions);
+}
+
+function updateStatusButton() {
+  const btn = document.getElementById("status-toggle");
+  if (!btn) return;
+  const n = hiddenStatuses.size;
+  btn.textContent = n ? `Hide status (${n})` : "Hide status";
+  btn.classList.toggle("has-hidden", n > 0);
+}
+
 // ---------- Sorting ----------
 // Click a column heading to sort by it; click again to reverse. Each column
 // sorts by the value behind the cell rather than the text in it, so money
@@ -402,7 +512,13 @@ function render() {
 
   const visible = sortOpps(
     opps.filter((o) => {
-      if (statusFilter.size && !statusFilter.has(o.status || "Unspecified")) {
+      const status = o.status || "Unspecified";
+      // Clicking a funnel segment is an explicit "show me these", so it wins
+      // over the hide list — otherwise picking Lost from the funnel while Lost
+      // is hidden would return nothing and look broken.
+      if (statusFilter.size) {
+        if (!statusFilter.has(status)) return false;
+      } else if (hiddenStatuses.has(status)) {
         return false;
       }
       if (!query) return true;
@@ -412,7 +528,9 @@ function render() {
     })
   );
 
-  // The stat strip describes whatever the table is showing.
+  // The stat strip describes every bid that matched, not just the page of
+  // them the table draws — otherwise the totals would change meaning the
+  // moment a filter pushed the count over the row limit.
   renderStats(visible);
   count.textContent = visible.length;
 
@@ -424,11 +542,18 @@ function render() {
       opps.length === 0
         ? "No opportunities yet — add one above."
         : "No opportunities match your search.";
+    renderRowLimitNote(0, 0);
     return;
   }
   empty.style.display = "none";
 
-  for (const opp of visible) {
+  // Drawing every row of a few thousand bids costs a visible pause, and
+  // nobody scrolls past the first few hundred. Sorting and filtering still
+  // run over all of them, so the cap only decides what is drawn.
+  const shown = visible.slice(0, ROW_LIMIT);
+  renderRowLimitNote(shown.length, visible.length);
+
+  for (const opp of shown) {
     const tr = document.createElement("tr");
 
     const nameTd = document.createElement("td");
@@ -1914,6 +2039,34 @@ for (const th of document.querySelectorAll(".bids thead th[data-sort]")) {
   });
 }
 markSortedHeader();
+
+// ---- Hide-status menu ----
+{
+  const btn = document.getElementById("status-toggle");
+  const menu = document.getElementById("status-menu");
+  if (btn && menu) {
+    const close = () => {
+      menu.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+    };
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (menu.hidden) {
+        renderStatusMenu(); // rebuild so newly-seen statuses appear
+        menu.hidden = false;
+        btn.setAttribute("aria-expanded", "true");
+      } else {
+        close();
+      }
+    });
+    menu.addEventListener("click", (e) => e.stopPropagation());
+    document.addEventListener("click", close);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !menu.hidden) close();
+    });
+    updateStatusButton();
+  }
+}
 
 // Re-rendering every row on every keystroke is fine at a few dozen bids and
 // not at a few thousand, so wait for a pause in typing.

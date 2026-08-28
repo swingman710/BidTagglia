@@ -68,6 +68,11 @@
             <input id="search" type="text" placeholder="Search opportunity, division, estimator or owner" />
           </div>
           <div class="controls-right">
+            <div class="status-picker">
+              <button id="status-toggle" type="button" class="btn-ghost sm"
+                      aria-expanded="false">Hide status</button>
+              <div id="status-menu" class="status-menu" hidden></div>
+            </div>
             <button id="new-opp" class="btn-primary inline">+ New Opportunity</button>
           </div>
         </div>
@@ -133,6 +138,7 @@
             </table>
           </div>
 
+          <div id="row-limit" class="row-limit" hidden></div>
           <div id="empty" class="empty">No opportunities yet — add one above.</div>
         </section>
        </div>
