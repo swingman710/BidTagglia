@@ -69,49 +69,52 @@
 :root[data-theme="dark"] {
   /* The nav is no longer a slate bar against white — in the dark it reads as
      the same material as the page, separated only by a line. */
-  --nav: #101012;
-  --nav-2: #1c1c20;
-  --nav-text: #e6e7ea;
-  --nav-muted: #7c8088;
+  --nav: #1a1a1f;
+  --nav-2: #26262d;
+  --nav-text: #eceef1;
+  --nav-muted: #9095a0;
 
-  --page-bg: #0a0a0b;        /* near-black ground */
-  --surface: #141416;        /* lifted card */
-  --band: #1a1a1d;           /* control + table-header band */
-  --band-2: #212126;         /* row hover */
-  --zebra: #17171a;          /* alt row — barely there */
+  /* Charcoal rather than true black: a pure-black ground makes light text
+     glare and buries the difference between the page and the cards on it.
+     Each step up is small but deliberate — page, card, band, hover. */
+  --page-bg: #16161a;
+  --surface: #1f1f24;
+  --band: #26262d;
+  --band-2: #2f2f37;
+  --zebra: #232329;
 
-  --blue: #5b8cff;           /* accent, lifted so it holds against black */
-  --blue-dark: #83a9ff;      /* hover / link text — lighter, not darker */
-  --blue-soft: #1a2338;
-  --yellow: #e6ca61;
-  --purple: #a78bfa;
-  --col-accent: #1d1a24;     /* sorted column tint */
-  --col-accent-bd: #2b2635;
+  --blue: #6d99ff;
+  --blue-dark: #96b6ff;      /* hover / link text — lighter, not darker */
+  --blue-soft: #22304d;
+  --yellow: #f0d675;
+  --purple: #b49bff;
+  --col-accent: #262232;
+  --col-accent-bd: #353042;
 
-  --border: #232327;
-  --border-2: #2e2e34;
-  --grid: #1f1f23;
+  --border: #303038;
+  --border-2: #3d3d47;
+  --grid: #2a2a31;
 
-  --ink: #f2f3f5;
-  --text: #c3c6cc;
-  --muted: #8b8f97;
-  --head-text: #9aa0a8;
-  --faint: #7e838c;
+  --ink: #f5f6f8;
+  --text: #d6d9df;
+  --muted: #a0a5ae;
+  --head-text: #b0b5bd;
+  --faint: #8b909a;
 
-  --green: #4ade80;
-  --green-soft: #14281c;
-  --orange: #fbbf24;
-  --amber: #fbbf24;
-  --amber-soft: #2a2113;
-  --red: #f87171;
-  --red-soft: #2c1618;
-  --red-border: #4a2326;
-  --line: #232327;
+  --green: #5ee68f;
+  --green-soft: #1a3325;
+  --orange: #fcc24d;
+  --amber: #fcc24d;
+  --amber-soft: #332913;
+  --red: #ff8a8a;
+  --red-soft: #3a1e20;
+  --red-border: #5a2e31;
+  --line: #303038;
 
-  --ring: 0 0 0 3px rgba(91, 140, 255, 0.28);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.55);
-  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.7);
+  --ring: 0 0 0 3px rgba(109, 153, 255, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.65);
 
   color-scheme: dark;
 }
@@ -498,7 +501,7 @@ textarea:focus {
   width: 100%;
   padding: 9px 14px 9px 36px;
   font-size: 14px;
-  background: #fff;
+  background: var(--surface);
 }
 
 .search .ic {
