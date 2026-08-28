@@ -11,6 +11,16 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
+    <script>
+      // Match the theme chosen on the dashboard, before anything is painted.
+      try {
+        if (localStorage.getItem("battag_theme") === "dark") {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      } catch (e) {
+        /* storage disabled — light theme is the right fallback */
+      }
+    </script>
   </head>
   <body class="login-page">
     <div class="backdrop"></div>

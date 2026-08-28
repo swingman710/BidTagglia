@@ -23,6 +23,16 @@
     </style>
     <script>
       document.documentElement.classList.add("gate-pending");
+
+      // Set the theme before any markup is parsed. Doing it later means a
+      // flash of the light theme on every load for anyone using dark mode.
+      try {
+        if (localStorage.getItem("battag_theme") === "dark") {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      } catch (e) {
+        /* storage disabled — light theme is the right fallback */
+      }
     </script>
   </head>
   <body>
@@ -39,6 +49,34 @@
             <span class="avatar" id="user-avatar">T</span>
             <span class="uname" id="user-name">trossi</span>
           </span>
+          <div class="settings-picker">
+            <button id="settings-toggle" type="button" class="icon-btn"
+                    aria-label="Settings" aria-expanded="false" title="Settings">
+              <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+                <path fill="currentColor" d="M12 15.5A3.5 3.5 0 1 1 15.5 12
+                  3.5 3.5 0 0 1 12 15.5Zm7.43-2.53a7.6 7.6 0 0 0 0-1.94l2.05-1.6
+                  a.5.5 0 0 0 .12-.64l-1.94-3.36a.5.5 0 0 0-.61-.22l-2.42.97
+                  a7.3 7.3 0 0 0-1.68-.97l-.36-2.57a.5.5 0 0 0-.5-.42h-3.88
+                  a.5.5 0 0 0-.5.42l-.36 2.57a7.3 7.3 0 0 0-1.68.97l-2.42-.97
+                  a.5.5 0 0 0-.61.22L2.4 8.79a.5.5 0 0 0 .12.64l2.05 1.6
+                  a7.6 7.6 0 0 0 0 1.94l-2.05 1.6a.5.5 0 0 0-.12.64l1.94 3.36
+                  a.5.5 0 0 0 .61.22l2.42-.97a7.3 7.3 0 0 0 1.68.97l.36 2.57
+                  a.5.5 0 0 0 .5.42h3.88a.5.5 0 0 0 .5-.42l.36-2.57
+                  a7.3 7.3 0 0 0 1.68-.97l2.42.97a.5.5 0 0 0 .61-.22l1.94-3.36
+                  a.5.5 0 0 0-.12-.64Z"/>
+              </svg>
+            </button>
+            <div id="settings-menu" class="settings-menu" hidden>
+              <div class="settings-head">Settings</div>
+              <label class="settings-row">
+                <span>
+                  Dark mode
+                  <small>Easier on the eyes in a dim office</small>
+                </span>
+                <input type="checkbox" id="dark-toggle" class="switch" />
+              </label>
+            </div>
+          </div>
           <button id="logout" class="btn-ghost sm">Sign out</button>
         </div>
       </div>

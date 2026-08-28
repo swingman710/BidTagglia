@@ -305,6 +305,7 @@
     }
     canvas.style.display = "";
     emptyEl.hidden = true;
+    applyChartTheme(); // axis and legend text follow the current theme
 
     // The chart always shows the twelve busiest groups, whatever order the
     // table is sorted in — otherwise sorting a column would quietly change

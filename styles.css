@@ -40,8 +40,12 @@
   --green: #16a34a;
   --green-soft: #e7f5ec;
   --orange: #d97706;
+  --amber: #b45309;          /* "on hold" pill text */
+  --amber-soft: #fdf0db;
   --red: #dc2626;
   --red-soft: #fdecec;
+  --red-border: #f6cccc;
+  --line: #e3e7ef;           /* hairline divider */
 
   --ring: 0 0 0 3px rgba(69, 125, 242, 0.2);
   --shadow-sm: 0 1px 2px rgba(42, 48, 64, 0.06);
@@ -50,6 +54,66 @@
 
   --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     Helvetica, Arial, sans-serif;
+}
+
+/* ==========================================================================
+   DARK MODE
+   Near-black ground with softly lifted panels, quiet borders and a single
+   bright accent — the palette from the muzaic reference.
+
+   Everything in this file is painted through the tokens above, so the theme
+   is a token swap rather than a second stylesheet. Set by the Settings menu,
+   which writes data-theme="dark" on <html>.
+   ========================================================================== */
+
+:root[data-theme="dark"] {
+  /* The nav is no longer a slate bar against white — in the dark it reads as
+     the same material as the page, separated only by a line. */
+  --nav: #101012;
+  --nav-2: #1c1c20;
+  --nav-text: #e6e7ea;
+  --nav-muted: #7c8088;
+
+  --page-bg: #0a0a0b;        /* near-black ground */
+  --surface: #141416;        /* lifted card */
+  --band: #1a1a1d;           /* control + table-header band */
+  --band-2: #212126;         /* row hover */
+  --zebra: #17171a;          /* alt row — barely there */
+
+  --blue: #5b8cff;           /* accent, lifted so it holds against black */
+  --blue-dark: #83a9ff;      /* hover / link text — lighter, not darker */
+  --blue-soft: #1a2338;
+  --yellow: #e6ca61;
+  --purple: #a78bfa;
+  --col-accent: #1d1a24;     /* sorted column tint */
+  --col-accent-bd: #2b2635;
+
+  --border: #232327;
+  --border-2: #2e2e34;
+  --grid: #1f1f23;
+
+  --ink: #f2f3f5;
+  --text: #c3c6cc;
+  --muted: #8b8f97;
+  --head-text: #9aa0a8;
+  --faint: #7e838c;
+
+  --green: #4ade80;
+  --green-soft: #14281c;
+  --orange: #fbbf24;
+  --amber: #fbbf24;
+  --amber-soft: #2a2113;
+  --red: #f87171;
+  --red-soft: #2c1618;
+  --red-border: #4a2326;
+  --line: #232327;
+
+  --ring: 0 0 0 3px rgba(91, 140, 255, 0.28);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.7);
+
+  color-scheme: dark;
 }
 
 * {
@@ -566,6 +630,125 @@ textarea:focus {
   text-overflow: ellipsis;
 }
 
+/* ---- Settings menu (brand header) ---- */
+
+.settings-picker {
+  position: relative;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.icon-btn:hover {
+  color: var(--blue-dark);
+  border-color: var(--blue);
+}
+
+.icon-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.settings-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 60;
+  width: 268px;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  padding: 6px;
+}
+
+.settings-head {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 8px 10px 6px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.settings-row:hover {
+  background: var(--band);
+}
+
+.settings-row small {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+/* A checkbox drawn as a sliding switch. */
+.switch {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--border-2);
+  border: 0;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.16s ease;
+}
+
+.switch:checked {
+  background: var(--blue);
+}
+
+.switch:checked::after {
+  transform: translateX(16px);
+}
+
+.switch:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
 /* ---- Hide-status menu ---- */
 
 .status-picker {
@@ -650,7 +833,7 @@ textarea:focus {
 }
 
 .funnel-seg.is-picked {
-  stroke: #0f172a;
+  stroke: var(--ink);
   stroke-width: 0.8;
   vector-effect: non-scaling-stroke;
 }
@@ -667,7 +850,7 @@ textarea:focus {
 
 .funnel-clear {
   border: 1px solid var(--border-2);
-  background: #fff;
+  background: var(--surface);
   border-radius: 999px;
   padding: 2px 10px;
   font: inherit;
@@ -677,7 +860,7 @@ textarea:focus {
 }
 
 .funnel-clear:hover {
-  color: #0f172a;
+  color: var(--ink);
 }
 
 .chart-hint {
@@ -861,7 +1044,7 @@ table.bids td.days-overdue {
 /* Statuses with no countdown (won, lost, on hold, ...) — the Bid Due column
    already carries the date, so the cell is simply greyed out. */
 table.bids td.days-na {
-  background: #e8ebf1;
+  background: var(--band);
 }
 
 table.bids .col-value {
@@ -917,7 +1100,7 @@ table.bids td.col-status {
 }
 .status.hold {
   color: var(--amber);
-  background: #fdf0db;
+  background: var(--amber-soft);
 }
 
 .empty {
@@ -1028,7 +1211,7 @@ table.bids td.col-status {
 .error {
   display: none;
   background: var(--red-soft);
-  border: 1px solid #f6cccc;
+  border: 1px solid var(--red-border);
   color: var(--red);
   font-size: 13px;
   padding: 10px 12px;
@@ -1789,7 +1972,7 @@ table.bids tbody tr.bid-row {
 .quote-table th {
   text-align: left;
   padding: 8px 10px;
-  background: #565b66;
+  background: var(--nav);
   color: #fff;
   font-weight: 600;
   font-size: 12px;

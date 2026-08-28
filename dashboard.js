@@ -14,6 +14,52 @@ document.getElementById("logout").addEventListener("click", () => {
   BBAuth.signOut();
 });
 
+// ---------- Settings menu ----------
+// The theme itself is applied by an inline script in <head>, before anything
+// is painted; this only handles switching it and remembering the choice.
+
+const THEME_KEY = "battag_theme";
+
+function setTheme(dark) {
+  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+  try {
+    localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
+  } catch (e) {
+    console.error("Could not save the theme:", e);
+  }
+  // Chart.js bakes its colors in at construction, so the charts have to be
+  // rebuilt against the new palette rather than just restyled.
+  renderCharts(loadOpps());
+  refreshActiveView();
+}
+
+{
+  const btn = document.getElementById("settings-toggle");
+  const menu = document.getElementById("settings-menu");
+  const toggle = document.getElementById("dark-toggle");
+
+  if (btn && menu && toggle) {
+    toggle.checked =
+      document.documentElement.getAttribute("data-theme") === "dark";
+    toggle.addEventListener("change", () => setTheme(toggle.checked));
+
+    const close = () => {
+      menu.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+    };
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      menu.hidden = !menu.hidden;
+      btn.setAttribute("aria-expanded", String(!menu.hidden));
+    });
+    menu.addEventListener("click", (e) => e.stopPropagation());
+    document.addEventListener("click", close);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !menu.hidden) close();
+    });
+  }
+}
+
 // ---------- Opportunity storage (Supabase) ----------
 // Each bid is one row: { id, created_at, data: <bid object> }. We keep an
 // in-memory cache so render()/distinctPrev() can stay synchronous; the cache
@@ -641,8 +687,20 @@ for (const tab of document.querySelectorAll(".nav-tab")) {
 
 // ---------- Charts ----------
 
+// Chart.js defaults to near-black text and light grid lines, both of which
+// disappear on a dark ground. Read the current theme's tokens instead so the
+// charts follow it. Called before every chart is built.
+function applyChartTheme() {
+  if (typeof Chart === "undefined") return;
+  const css = getComputedStyle(document.documentElement);
+  Chart.defaults.color = css.getPropertyValue("--muted").trim();
+  Chart.defaults.borderColor = css.getPropertyValue("--grid").trim();
+  Chart.defaults.font.family = css.getPropertyValue("--sans").trim();
+}
+
 function renderCharts(opps) {
   renderFunnel(opps);
+  applyChartTheme();
   if (typeof Chart !== "undefined") renderEstimatorChart(opps);
 }
 
