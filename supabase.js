@@ -1,12 +1,17 @@
 // ===========================================================================
 //  Supabase client + config.
-//  The anon (public) key is meant to live in client code — it's protected by
-//  the table's Row Level Security policy. Do NOT put the service_role key here.
+//
+//  The publishable key is meant to live in client code — what it can actually
+//  do is decided by each table's Row Level Security policy. Do NOT put the
+//  secret / service_role key here.
+//
+//  NOTE: the RLS policies currently grant this key full read AND write on
+//  every table, which also lets anyone holding it add themselves to
+//  app_members and sign in. Tightening that is outstanding work.
 // ===========================================================================
 
-const SUPABASE_URL = "https://hbfqisenzxjaktirqpxp.supabase.co";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiZnFpc2VuenhqYWt0aXJxcHhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4NTA3MTYsImV4cCI6MjA5NjQyNjcxNn0.MJK5QGuNpVNrU5wDXui-i6fHIjwln8CsYEeFudHanG8";
+const SUPABASE_URL = "https://syxfuydxpuewhewmfajj.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_Id5Tt9PSvhneLXK71-nDOA_DiRn2mBG";
 const SUPABASE_TABLE = "opportunities";
 
 // Created from the UMD global provided by the @supabase/supabase-js CDN script.
