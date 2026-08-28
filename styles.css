@@ -697,6 +697,43 @@ table.bids th {
   white-space: nowrap;
 }
 
+/* Sortable headings. The arrow is always in the layout — hidden rather than
+   absent — so the row doesn't shift when the sorted column changes. */
+table.bids th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+}
+
+table.bids th[data-sort]:hover {
+  color: var(--ink);
+  background: var(--band-2);
+}
+
+table.bids th[data-sort]:focus-visible {
+  outline: none;
+  box-shadow: inset var(--ring);
+}
+
+table.bids th[data-sort]::after {
+  content: "▲";
+  font-size: 8px;
+  margin-left: 5px;
+  vertical-align: 1px;
+  visibility: hidden;
+}
+
+table.bids th[data-sort].is-sorted {
+  color: var(--ink);
+}
+
+table.bids th[data-sort].is-sorted::after {
+  visibility: visible;
+}
+
+table.bids th[data-sort].is-sorted.desc::after {
+  content: "▼";
+}
+
 table.bids th:last-child {
   border-right: none;
 }

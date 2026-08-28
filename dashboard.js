@@ -323,19 +323,80 @@ function renderStats(opps) {
   document.getElementById("stat-top").textContent = currency.format(top);
 }
 
+// ---------- Sorting ----------
+// Click a column heading to sort by it; click again to reverse. Each column
+// sorts by the value behind the cell rather than the text in it, so money
+// sorts numerically and dates chronologically.
+
+const SORT_KEYS = {
+  name: (o) => (o.name || "").toLowerCase(),
+  division: (o) => (o.division || "").toLowerCase(),
+  bidDue: (o) => o.bidDueDate || "",
+  days: (o) => daysUntil(o.bidDueDate),
+  value: oppValue,
+  leadEstimator: (o) => (o.leadEstimator || "").toLowerCase(),
+  status: (o) => (o.status || "").toLowerCase(),
+};
+
+// Default: soonest due first, which is what the countdown column is for.
+let sortBy = "bidDue";
+let sortDir = 1; // 1 ascending, -1 descending
+
+function sortOpps(list) {
+  const key = SORT_KEYS[sortBy];
+  if (!key) return list;
+  return [...list].sort((a, b) => {
+    const x = key(a);
+    const y = key(b);
+    // Bids with nothing in the sorted column collect at the bottom either
+    // way — a blank is not "smaller", it's just missing.
+    const xEmpty = x === null || x === undefined || x === "";
+    const yEmpty = y === null || y === undefined || y === "";
+    if (xEmpty || yEmpty) return xEmpty && yEmpty ? 0 : xEmpty ? 1 : -1;
+    if (typeof x === "number" && typeof y === "number") return (x - y) * sortDir;
+    return String(x).localeCompare(String(y)) * sortDir;
+  });
+}
+
+function setSort(key) {
+  if (sortBy === key) sortDir = -sortDir;
+  else {
+    sortBy = key;
+    // Text reads best A-Z; numbers and dates are usually wanted biggest or
+    // soonest first, so start those the other way round.
+    sortDir = key === "value" || key === "days" ? -1 : 1;
+  }
+  markSortedHeader();
+  render();
+}
+
+function markSortedHeader() {
+  for (const th of document.querySelectorAll(".bids thead th[data-sort]")) {
+    const active = th.dataset.sort === sortBy;
+    th.classList.toggle("is-sorted", active);
+    th.classList.toggle("desc", active && sortDir === -1);
+    th.setAttribute(
+      "aria-sort",
+      active ? (sortDir === 1 ? "ascending" : "descending") : "none"
+    );
+  }
+}
+
 function render() {
   const opps = loadOpps();
   const query = search.value.trim().toLowerCase();
 
-  const visible = opps.filter((o) => {
-    if (statusFilter.size && !statusFilter.has(o.status || "Unspecified")) {
-      return false;
-    }
-    if (!query) return true;
-    return [o.name, o.division, o.leadEstimator, o.ownerCustomer].some((f) =>
-      (f || "").toLowerCase().includes(query)
-    );
-  });
+  const visible = sortOpps(
+    opps.filter((o) => {
+      if (statusFilter.size && !statusFilter.has(o.status || "Unspecified")) {
+        return false;
+      }
+      if (!query) return true;
+      return [o.name, o.division, o.leadEstimator, o.ownerCustomer].some((f) =>
+        (f || "").toLowerCase().includes(query)
+      );
+    })
+  );
 
   // The stat strip describes whatever the table is showing.
   renderStats(visible);
@@ -1196,7 +1257,7 @@ function detailSections(o) {
     ]],
     ["Requirements", [
       ["Requirements", fmtList(o.flags)],
-      ["Description", fmtText(o.description)],
+      ["Description / Notes", fmtText(o.description)],
     ]],
     ["Location", [
       ["Project address", fmtText(o.projectAddress)],
@@ -1828,7 +1889,25 @@ oppForm.addEventListener("submit", (e) => {
   closeModal();
 });
 
-search.addEventListener("input", render);
+for (const th of document.querySelectorAll(".bids thead th[data-sort]")) {
+  th.tabIndex = 0;
+  th.addEventListener("click", () => setSort(th.dataset.sort));
+  th.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setSort(th.dataset.sort);
+    }
+  });
+}
+markSortedHeader();
+
+// Re-rendering every row on every keystroke is fine at a few dozen bids and
+// not at a few thousand, so wait for a pause in typing.
+let searchTimer = null;
+search.addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(render, 150);
+});
 
 // The first and only unprompted read of bid data — held behind the gate so an
 // uninvited account never pulls it into the browser at all.
