@@ -176,6 +176,57 @@
     renderMatches(hits);
   }
 
+  // ---------- Breakdown sorting ----------
+  // Click a column to sort the table. Win rate sorts on the underlying
+  // fraction, not the "62.5%" string, so 100% doesn't land between 10% and 20%.
+
+  const GROUP_KEYS = {
+    name: (g) => g.name.toLowerCase(),
+    bids: (g) => g.bids,
+    won: (g) => g.won,
+    lost: (g) => g.lost,
+    rate: (g) => (g.bids ? g.won / g.bids : -1),
+    wonValue: (g) => g.wonValue,
+    lostValue: (g) => g.lostValue,
+  };
+
+  let groupSort = "bids";
+  let groupDir = -1; // busiest first, which is the useful default here
+
+  function sortGroups(list) {
+    const key = GROUP_KEYS[groupSort] || GROUP_KEYS.bids;
+    return list.sort((a, b) => {
+      const x = key(a);
+      const y = key(b);
+      const cmp =
+        typeof x === "number" ? x - y : String(x).localeCompare(String(y));
+      // Ties keep a stable, readable order rather than whatever the grouping
+      // happened to produce.
+      return cmp * groupDir || a.name.localeCompare(b.name);
+    });
+  }
+
+  function setGroupSort(key) {
+    if (groupSort === key) groupDir = -groupDir;
+    else {
+      groupSort = key;
+      groupDir = key === "name" ? 1 : -1; // names A-Z, everything else biggest first
+    }
+    runReport();
+  }
+
+  function markBreakdownHeader() {
+    for (const th of document.querySelectorAll(".rep-table thead th[data-sort]")) {
+      const active = th.dataset.sort === groupSort;
+      th.classList.toggle("is-sorted", active);
+      th.classList.toggle("desc", active && groupDir === -1);
+      th.setAttribute(
+        "aria-sort",
+        active ? (groupDir === 1 ? "ascending" : "descending") : "none"
+      );
+    }
+  }
+
   // One row per value of the grouping variable. Bids with several values for
   // that variable (CM/GC, local unions) count once under each of them.
   function renderBreakdown(hits) {
@@ -207,14 +258,13 @@
       }
     }
 
-    const rows = [...groups.values()].sort(
-      (a, b) => b.bids - a.bids || a.name.localeCompare(b.name)
-    );
+    const rows = sortGroups([...groups.values()]);
 
     const tbody = $("rep-breakdown");
     tbody.innerHTML = "";
     $("rep-group-count").textContent = rows.length;
     $("rep-group-empty").style.display = rows.length ? "none" : "block";
+    markBreakdownHeader();
 
     for (const g of rows) {
       const tr = document.createElement("tr");
@@ -256,7 +306,12 @@
     canvas.style.display = "";
     emptyEl.hidden = true;
 
-    const top = rows.slice(0, 12);
+    // The chart always shows the twelve busiest groups, whatever order the
+    // table is sorted in — otherwise sorting a column would quietly change
+    // which twelve are charted.
+    const top = [...rows]
+      .sort((a, b) => b.bids - a.bids || a.name.localeCompare(b.name))
+      .slice(0, 12);
     repChart = new Chart(canvas, {
       type: "bar",
       data: {
@@ -364,4 +419,15 @@
   $("rep-from").addEventListener("change", runReport);
   $("rep-to").addEventListener("change", runReport);
   $("rep-reset").addEventListener("click", resetFilters);
+
+  for (const th of document.querySelectorAll(".rep-table thead th[data-sort]")) {
+    th.tabIndex = 0;
+    th.addEventListener("click", () => setGroupSort(th.dataset.sort));
+    th.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setGroupSort(th.dataset.sort);
+      }
+    });
+  }
 })();
