@@ -20,15 +20,9 @@
   // ---------- Data ----------
 
   async function fetchContacts() {
-    const { data, error } = await sb
-      .from(TABLE)
-      .select("*")
-      .order("name", { ascending: true });
-    if (error) {
-      console.error("Contact load error:", error.message);
-      return contacts;
-    }
-    contacts = data || [];
+    const { rows, error } = await fetchAll(TABLE, { order: "name" });
+    if (error) return contacts;
+    contacts = rows;
     for (const c of contacts) rememberCompany(c.company);
     return contacts;
   }

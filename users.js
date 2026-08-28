@@ -31,15 +31,9 @@
   // ---------- Data ----------
 
   async function fetchMembers() {
-    const { data, error } = await sb
-      .from(TABLE)
-      .select("*")
-      .order("invited_at", { ascending: true });
-    if (error) {
-      console.error("Member load error:", error.message);
-      return members;
-    }
-    members = data || [];
+    const { rows, error } = await fetchAll(TABLE, { order: "invited_at" });
+    if (error) return members;
+    members = rows;
     return members;
   }
 

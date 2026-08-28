@@ -30,13 +30,10 @@ const COMPANY_INDUSTRIES = [
   // ---------- Data ----------
 
   async function fetchCompanies() {
-    const { data, error } = await sb.from(TABLE).select("*");
-    if (error) {
-      console.error("Company load error:", error.message);
-      return saved;
-    }
+    const { rows, error } = await fetchAll(TABLE);
+    if (error) return saved;
     saved = new Map();
-    for (const row of data || []) {
+    for (const row of rows) {
       rememberCompany(row.name);
       saved.set(companyKey(row.name), row);
     }

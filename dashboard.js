@@ -124,16 +124,33 @@ function fromRow(row) {
   return opp;
 }
 
-async function fetchOpps() {
-  const { data, error } = await sb
-    .from(SUPABASE_TABLE)
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) {
-    console.error("Supabase load error:", error.message);
-    return oppsCache;
+// Supabase caps a single select at 1,000 rows and gives no hint that it did —
+// you just get 1,000 and no error. Every table read goes through here so a
+// table larger than that can't silently come back short.
+const PAGE_SIZE = 1000;
+
+async function fetchAll(table, { select = "*", order, ascending = true } = {}) {
+  const out = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    let q = sb.from(table).select(select).range(from, from + PAGE_SIZE - 1);
+    if (order) q = q.order(order, { ascending });
+    const { data, error } = await q;
+    if (error) {
+      console.error(`${table} load error:`, error.message);
+      return { rows: out, error };
+    }
+    out.push(...(data || []));
+    if (!data || data.length < PAGE_SIZE) return { rows: out, error: null };
   }
-  oppsCache = (data || []).map(fromRow);
+}
+
+async function fetchOpps() {
+  const { rows, error } = await fetchAll(SUPABASE_TABLE, {
+    order: "created_at",
+    ascending: false,
+  });
+  if (error) return oppsCache;
+  oppsCache = rows.map(fromRow);
   return oppsCache;
 }
 
@@ -142,14 +159,11 @@ async function fetchOpps() {
 // sent on, falling back to when the quote was entered. Quotes with no price at
 // all are ignored. Every company named on a quote is registered here too.
 async function fetchQuotes() {
-  const { data, error } = await sb
-    .from(PRICING_TABLE)
-    .select("opportunity_id, company, type, price, price_sent_on, created_at");
-  if (error) {
-    console.error("Quote load error:", error.message);
-    return quotesCache;
-  }
-  quotesCache = data || [];
+  const { rows, error } = await fetchAll(PRICING_TABLE, {
+    select: "opportunity_id, company, type, price, price_sent_on, created_at",
+  });
+  if (error) return quotesCache;
+  quotesCache = rows;
 
   const stamps = new Map(); // opp id -> stamp of the quote we kept
   proposalPrices.clear();

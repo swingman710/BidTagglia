@@ -35,15 +35,9 @@ const ACTIVITY_TYPES = [
   // ---------- Data ----------
 
   async function fetchActivities() {
-    const { data, error } = await sb
-      .from(TABLE)
-      .select("*")
-      .order("scheduled_date", { ascending: true, nullsFirst: false });
-    if (error) {
-      console.error("Activity load error:", error.message);
-      return activities;
-    }
-    activities = data || [];
+    const { rows, error } = await fetchAll(TABLE, { order: "scheduled_date" });
+    if (error) return activities;
+    activities = rows;
     return activities;
   }
 
