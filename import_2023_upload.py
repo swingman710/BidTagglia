@@ -49,6 +49,18 @@ def call(method, path, body=None, prefer=None):
         sys.exit(f"\n{method} {path} failed: HTTP {e.code}\n{e.read().decode()[:600]}")
 
 
+def fetch_legacy_ids():
+    """legacy_id -> row uuid, for every bid that came from the old tracker."""
+    out, page = {}, 0
+    while True:
+        rows = call("GET", "/rest/v1/opportunities?select=id,legacy_id"
+                           f"&legacy_id=not.is.null&limit=1000&offset={page * 1000}")
+        if not rows:
+            return out
+        out.update({r["legacy_id"]: r["id"] for r in rows})
+        page += 1
+
+
 def unquote(v):
     """import_2023 emits SQL literals; unwrap them back to Python values."""
     if v == "null":
@@ -147,34 +159,45 @@ def main():
         print("\nDry run: nothing written.")
         return
 
+    # ---- Skip anything a previous run already brought across ---------------
+    # PostgREST's on_conflict can't infer a PARTIAL unique index (the
+    # `where legacy_id is not null` clause), so dedupe here instead. Same
+    # effect: running this twice does not double the data.
+    already = fetch_legacy_ids()
+    if already:
+        before = len(bids)
+        bids = [b for b in bids if b["legacy_id"] not in already]
+        print(f"\n{before - len(bids)} bids are already imported — skipping those.")
+
     # ---- Insert bids -------------------------------------------------------
-    # on_conflict=legacy_id makes a re-run skip what is already there rather
-    # than duplicating it.
-    print(f"\nInserting bids in batches of {BATCH}...")
-    for i in range(0, len(bids), BATCH):
-        chunk = bids[i:i + BATCH]
-        call("POST", "/rest/v1/opportunities?on_conflict=legacy_id", chunk,
-             prefer="resolution=ignore-duplicates,return=minimal")
-        print(f"  {min(i + BATCH, len(bids))}/{len(bids)}")
+    if bids:
+        print(f"\nInserting bids in batches of {BATCH}...")
+        for i in range(0, len(bids), BATCH):
+            call("POST", "/rest/v1/opportunities", bids[i:i + BATCH],
+                 prefer="return=minimal")
+            print(f"  {min(i + BATCH, len(bids))}/{len(bids)}")
 
     # ---- Map legacy_id -> the uuid the database assigned --------------------
     print("Reading back ids...")
-    id_map = {}
+    id_map = fetch_legacy_ids()
+    print(f"  {len(id_map)} bids carry a legacy id")
+
+    # A re-run must not duplicate quotes either.
+    existing_q = set()
     page = 0
     while True:
-        rows = call("GET", f"/rest/v1/opportunities?select=id,legacy_id"
-                           f"&legacy_id=not.is.null&limit=1000&offset={page * 1000}")
+        rows = call("GET", "/rest/v1/pricing_quotes?select=opportunity_id,company"
+                           f"&limit=1000&offset={page * 1000}")
         if not rows:
             break
-        id_map.update({r["legacy_id"]: r["id"] for r in rows})
+        existing_q.update((r["opportunity_id"], r["company"]) for r in rows)
         page += 1
-    print(f"  {len(id_map)} bids carry a legacy id")
 
     # ---- Insert quotes -----------------------------------------------------
     rows = []
     for q in quotes:
         oid = id_map.get(q["legacy_id"])
-        if not oid:
+        if not oid or (oid, q["company"]) in existing_q:
             continue
         rows.append({k: v for k, v in q.items() if k != "legacy_id"} | {"opportunity_id": oid})
 
