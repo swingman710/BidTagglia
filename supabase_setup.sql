@@ -179,6 +179,9 @@ create index if not exists app_members_identity_idx
 -- ---------------------------------------------------------------------------
 --  Access policies.
 --
+--  Written out one table at a time rather than as a loop: a plpgsql DO block
+--  needs $$ quoting, which the SQL Editor does not reliably pass through.
+--
 --  WARNING — these grant the public key full read AND write on every table,
 --  which is what the app relies on today. It also means anyone holding the key
 --  can add themselves to app_members and sign in. Tightening this is tracked
@@ -186,18 +189,40 @@ create index if not exists app_members_identity_idx
 --  during the move.
 -- ---------------------------------------------------------------------------
 
-do $$
-declare t text;
-begin
-  foreach t in array array['opportunities','pricing_quotes','project_members',
-                           'companies','contacts','activities','app_members']
-  loop
-    execute format('alter table public.%I enable row level security', t);
-    execute format('drop policy if exists "anon full access" on public.%I', t);
-    execute format('create policy "anon full access" on public.%I
-                      for all to anon using (true) with check (true)', t);
-  end loop;
-end $$;
+alter table public.opportunities enable row level security;
+drop policy if exists "anon full access" on public.opportunities;
+create policy "anon full access" on public.opportunities
+  for all to anon using (true) with check (true);
+
+alter table public.pricing_quotes enable row level security;
+drop policy if exists "anon full access" on public.pricing_quotes;
+create policy "anon full access" on public.pricing_quotes
+  for all to anon using (true) with check (true);
+
+alter table public.project_members enable row level security;
+drop policy if exists "anon full access" on public.project_members;
+create policy "anon full access" on public.project_members
+  for all to anon using (true) with check (true);
+
+alter table public.companies enable row level security;
+drop policy if exists "anon full access" on public.companies;
+create policy "anon full access" on public.companies
+  for all to anon using (true) with check (true);
+
+alter table public.contacts enable row level security;
+drop policy if exists "anon full access" on public.contacts;
+create policy "anon full access" on public.contacts
+  for all to anon using (true) with check (true);
+
+alter table public.activities enable row level security;
+drop policy if exists "anon full access" on public.activities;
+create policy "anon full access" on public.activities
+  for all to anon using (true) with check (true);
+
+alter table public.app_members enable row level security;
+drop policy if exists "anon full access" on public.app_members;
+create policy "anon full access" on public.app_members
+  for all to anon using (true) with check (true);
 
 
 -- ---------------------------------------------------------------------------
