@@ -633,6 +633,190 @@ textarea:focus {
   text-overflow: ellipsis;
 }
 
+/* ==========================================================================
+   TOASTS
+   Replaces alert(), which freezes the page behind an OS dialog. Stacked in
+   the bottom-right; confirmations fade themselves, errors wait to be read.
+   ========================================================================== */
+
+.toasts {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  pointer-events: none; /* the page stays usable between toasts */
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 380px;
+  padding: 11px 12px 11px 14px;
+  border: 1px solid var(--border-2);
+  border-left: 3px solid var(--muted);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  font-size: 13px;
+  color: var(--ink);
+  animation: toast-in 0.18s ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.toast.is-going {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.toast.ok {
+  border-left-color: var(--green);
+}
+
+.toast.error {
+  border-left-color: var(--red);
+}
+
+.toast-text {
+  flex: 1;
+  line-height: 1.45;
+  overflow-wrap: anywhere; /* database errors can be one long token */
+}
+
+.toast-x {
+  flex: none;
+  border: 0;
+  background: none;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.toast-x:hover {
+  color: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+  .toast.is-going {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   LOADING STATE
+   Placeholder rows while the first fetch runs, so the table doesn't sit
+   empty and look broken.
+   ========================================================================== */
+
+.skeleton-row td {
+  padding: 10px 14px;
+}
+
+.skeleton-bar {
+  height: 11px;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--band) 25%,
+    var(--band-2) 37%,
+    var(--band) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton {
+  from {
+    background-position: 100% 50%;
+  }
+  to {
+    background-position: 0 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   QUICK FILTER CHIPS
+   ========================================================================== */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 14px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border: 1px solid var(--border-2);
+  border-radius: 999px;
+  background: var(--surface);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+
+.chip:hover {
+  border-color: var(--blue);
+  color: var(--blue-dark);
+}
+
+.chip:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.chip.is-on {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  color: var(--blue-dark);
+}
+
+/* How many bids the chip would show. Dimmed when it would show none, so a
+   dead end is visible before it's clicked. */
+.chip .chip-n {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+
+.chip.is-on .chip-n {
+  color: var(--blue-dark);
+}
+
+.chip.is-empty {
+  opacity: 0.55;
+}
+
 /* ---- Settings menu (brand header) ---- */
 
 .settings-picker {

@@ -60,6 +60,58 @@ function setTheme(dark) {
   }
 }
 
+// ---------- Toasts ----------
+// A short message in the corner instead of toastError(), which freezes the page
+// behind an OS dialog until it's dismissed. Errors stay until dismissed
+// because they usually need reading; confirmations clear themselves.
+//
+// Destructive confirmations stay as confirm() — those should block.
+
+function toast(message, { type = "info", timeout } = {}) {
+  let host = document.getElementById("toasts");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "toasts";
+    host.className = "toasts";
+    host.setAttribute("role", "status");
+    host.setAttribute("aria-live", "polite");
+    document.body.appendChild(host);
+  }
+
+  const el = document.createElement("div");
+  el.className = `toast ${type}`;
+
+  const text = document.createElement("span");
+  text.className = "toast-text";
+  text.textContent = message;
+
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "toast-x";
+  close.setAttribute("aria-label", "Dismiss");
+  close.textContent = "✕";
+
+  el.append(text, close);
+  host.appendChild(el);
+
+  let timer = null;
+  const dismiss = () => {
+    clearTimeout(timer);
+    el.classList.add("is-going");
+    // Let the fade finish before removing, but don't rely on the event —
+    // a backgrounded tab may never fire it.
+    setTimeout(() => el.remove(), 200);
+  };
+  close.addEventListener("click", dismiss);
+
+  const ms = timeout ?? (type === "error" ? 0 : 3200);
+  if (ms) timer = setTimeout(dismiss, ms);
+  return dismiss;
+}
+
+const toastError = (msg) => toast(msg, { type: "error" });
+const toastOk = (msg) => toast(msg, { type: "ok" });
+
 // ---------- Opportunity storage (Supabase) ----------
 // Each bid is one row: { id, created_at, data: <bid object> }. We keep an
 // in-memory cache so render()/distinctPrev() can stay synchronous; the cache
@@ -226,9 +278,35 @@ async function fetchQuotes() {
   return quotesCache;
 }
 
+// Placeholder rows during the first load. Without them the table sits empty
+// for the second or so the fetch takes, which reads as "no bids" rather than
+// "not loaded yet" — and that gets longer as more years are imported.
+function showLoadingRows(n = 12) {
+  const tbody = document.getElementById("bid-rows");
+  if (!tbody || tbody.childElementCount) return;
+  document.getElementById("empty").style.display = "none";
+  const widths = [70, 40, 55, 35, 50, 60, 45];
+  for (let i = 0; i < n; i++) {
+    const tr = document.createElement("tr");
+    tr.className = "skeleton-row";
+    for (const w of widths) {
+      const td = document.createElement("td");
+      const bar = document.createElement("div");
+      bar.className = "skeleton-bar";
+      // Vary the widths a little so it reads as content, not a grid.
+      bar.style.width = `${w - (i % 3) * 6}%`;
+      td.appendChild(bar);
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+}
+
 async function refreshOpps() {
+  showLoadingRows();
   await fetchQuotes();
   await fetchOpps();
+  renderChips();
   render();
   renderCharts(oppsCache);
   refreshActiveView(); // the Reports tab lists bids too
@@ -398,6 +476,79 @@ function renderRowLimitNote(shown, total) {
   note.textContent =
     `Showing the first ${shown.toLocaleString()} of ${total.toLocaleString()} ` +
     "— sort or filter to bring what you need to the top.";
+}
+
+// ---------- Quick filters ----------
+// One-click views over the bids still in play. Only one is on at a time —
+// they answer different questions, and combining them mostly yields nothing.
+//
+// Each ignores the hidden-status list, since these are the statuses you'd
+// want anyway; "My bids" is the exception and stacks with whichever is on.
+
+const ACTIVE_SET = new Set(ACTIVE_STATUSES);
+
+const QUICK_FILTERS = {
+  due: {
+    label: "Due this week",
+    match: (o) => {
+      if (!ACTIVE_SET.has(o.status)) return false;
+      const d = daysUntil(o.bidDueDate);
+      return d !== null && d >= 0 && d <= 7;
+    },
+  },
+  overdue: {
+    label: "Overdue",
+    match: (o) => {
+      // Still being worked, but the date has passed — these need a decision.
+      if (!ACTIVE_SET.has(o.status)) return false;
+      const d = daysUntil(o.bidDueDate);
+      return d !== null && d < 0;
+    },
+  },
+  mine: {
+    label: "My bids",
+    match: (o) => {
+      const me = (BBAccess.account && BBAccess.account.name) || "";
+      if (!me) return false;
+      return (
+        (o.leadEstimator || "").toLowerCase() === me.toLowerCase() ||
+        (o.projectManager || "").toLowerCase() === me.toLowerCase()
+      );
+    },
+  },
+};
+
+let activeChip = null;
+
+function renderChips() {
+  const host = document.getElementById("quick-chips");
+  if (!host) return;
+  host.innerHTML = "";
+
+  const opps = loadOpps();
+  for (const [key, def] of Object.entries(QUICK_FILTERS)) {
+    const n = opps.filter(def.match).length;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "chip";
+    btn.classList.toggle("is-on", activeChip === key);
+    btn.classList.toggle("is-empty", n === 0 && activeChip !== key);
+    btn.setAttribute("aria-pressed", String(activeChip === key));
+
+    const label = document.createElement("span");
+    label.textContent = def.label;
+    const count = document.createElement("span");
+    count.className = "chip-n";
+    count.textContent = n;
+    btn.append(label, count);
+
+    btn.addEventListener("click", () => {
+      activeChip = activeChip === key ? null : key;
+      renderChips();
+      render();
+    });
+    host.appendChild(btn);
+  }
 }
 
 // ---------- Hiding statuses ----------
@@ -597,13 +748,19 @@ function render() {
   const opps = loadOpps();
   const query = search.value.trim().toLowerCase();
 
+  const chip = activeChip && QUICK_FILTERS[activeChip];
+
   const visible = sortOpps(
     opps.filter((o) => {
       const status = o.status || "Unspecified";
-      // Clicking a funnel segment is an explicit "show me these", so it wins
-      // over the hide list — otherwise picking Lost from the funnel while Lost
-      // is hidden would return nothing and look broken.
-      if (statusFilter.size) {
+      // A quick filter is an explicit request for a named set of bids, so it
+      // replaces the status rules rather than being narrowed by them.
+      if (chip) {
+        if (!chip.match(o)) return false;
+      } else if (statusFilter.size) {
+        // Clicking a funnel segment is likewise an explicit "show me these",
+        // so it wins over the hide list — otherwise picking Lost from the
+        // funnel while Lost is hidden would return nothing and look broken.
         if (!statusFilter.has(status)) return false;
       } else if (hiddenStatuses.has(status)) {
         return false;
@@ -1641,7 +1798,7 @@ let pricingDirty = false;
 async function addPricing(row) {
   const { error } = await sb.from(PRICING_TABLE).insert(row);
   if (error) {
-    alert("Could not save price: " + error.message);
+    toastError("Could not save price: " + error.message);
     return;
   }
   pricingDirty = true;
@@ -1650,7 +1807,7 @@ async function addPricing(row) {
 async function updatePricingStatus(id, status) {
   const { error } = await sb.from(PRICING_TABLE).update({ status }).eq("id", id);
   if (error) {
-    alert("Could not update status: " + error.message);
+    toastError("Could not update status: " + error.message);
     return;
   }
   renderPricing();
@@ -1659,7 +1816,7 @@ async function updatePricingStatus(id, status) {
 async function updatePricing(id, patch) {
   const { error } = await sb.from(PRICING_TABLE).update(patch).eq("id", id);
   if (error) {
-    alert("Could not save price: " + error.message);
+    toastError("Could not save price: " + error.message);
     return false;
   }
   // The price or its sent-on date may have changed which quote counts as the
@@ -1672,7 +1829,7 @@ async function deletePricing(id) {
   if (!confirm("Delete this price quote?")) return;
   const { error } = await sb.from(PRICING_TABLE).delete().eq("id", id);
   if (error) {
-    alert("Could not delete price: " + error.message);
+    toastError("Could not delete price: " + error.message);
     return;
   }
   pricingDirty = true;
@@ -1918,13 +2075,13 @@ async function fetchMembers(oppId) {
 
 async function addMember(row) {
   const { error } = await sb.from(MEMBERS_TABLE).insert(row);
-  if (error) alert("Could not add member: " + error.message);
+  if (error) toastError("Could not add member: " + error.message);
 }
 
 async function deleteMember(id) {
   const { error } = await sb.from(MEMBERS_TABLE).delete().eq("id", id);
   if (error) {
-    alert("Could not remove member: " + error.message);
+    toastError("Could not remove member: " + error.message);
     return;
   }
   renderTeam();
@@ -2031,7 +2188,7 @@ function checkedValues(cgId) {
 async function addOpp(opp) {
   const { error } = await sb.from(SUPABASE_TABLE).insert(toRow(opp));
   if (error) {
-    alert("Could not save opportunity: " + error.message);
+    toastError("Could not save opportunity: " + error.message);
     return;
   }
   await refreshOpps();
@@ -2040,7 +2197,7 @@ async function addOpp(opp) {
 async function updateOpp(id, opp) {
   const { error } = await sb.from(SUPABASE_TABLE).update(toRow(opp)).eq("id", id);
   if (error) {
-    alert("Could not update opportunity: " + error.message);
+    toastError("Could not update opportunity: " + error.message);
     return;
   }
   await refreshOpps();
@@ -2053,14 +2210,14 @@ async function deleteOpp(id) {
   for (const table of [PRICING_TABLE, MEMBERS_TABLE]) {
     const { error } = await sb.from(table).delete().eq("opportunity_id", oppId);
     if (error) {
-      alert("Could not delete opportunity: " + error.message);
+      toastError("Could not delete opportunity: " + error.message);
       return;
     }
   }
 
   const { error } = await sb.from(SUPABASE_TABLE).delete().eq("id", id);
   if (error) {
-    alert("Could not delete opportunity: " + error.message);
+    toastError("Could not delete opportunity: " + error.message);
     return;
   }
   await refreshOpps();

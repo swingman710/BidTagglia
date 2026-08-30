@@ -54,9 +54,10 @@
     if (!confirm(`Remove ${who}? They won't be able to sign in again.`)) return;
     const { error } = await sb.from(TABLE).delete().eq("id", member.id);
     if (error) {
-      alert("Could not remove user: " + error.message);
+      toastError("Could not remove user: " + error.message);
       return;
     }
+    toastOk(`Removed ${who}`);
     await renderUsers();
   }
 
@@ -73,7 +74,7 @@
     });
     if (error) {
       // 23505 = unique violation on `identity`.
-      alert(
+      toastError(
         error.code === "23505"
           ? `${identity} is already on the list.`
           : "Could not add user: " + error.message
@@ -130,6 +131,7 @@
     }
 
     if (await addMember({ email, name: f.name.value, role: f.role.value })) {
+      toastOk(`${email} can now sign in`);
       showAddForm(false);
       await renderUsers();
     }

@@ -47,7 +47,7 @@ const ACTIVITY_TYPES = [
       : sb.from(TABLE).insert(row);
     const { error } = await q;
     if (error) {
-      alert("Could not save activity: " + error.message);
+      toastError("Could not save activity: " + error.message);
       return false;
     }
     return true;
@@ -57,9 +57,10 @@ const ACTIVITY_TYPES = [
     if (!confirm(`Delete “${activity.title}”?`)) return;
     const { error } = await sb.from(TABLE).delete().eq("id", activity.id);
     if (error) {
-      alert("Could not delete activity: " + error.message);
+      toastError("Could not delete activity: " + error.message);
       return;
     }
+    toastOk(`Deleted “${activity.title}”`);
     await renderActivities();
   }
 
@@ -187,6 +188,7 @@ const ACTIVITY_TYPES = [
     });
     if (!ok) return;
 
+    toastOk(editingId ? `Saved “${title}”` : `Added “${title}”`);
     await showForm(false);
     await renderActivities();
   }

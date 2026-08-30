@@ -33,7 +33,7 @@
       : sb.from(TABLE).insert(row);
     const { error } = await q;
     if (error) {
-      alert("Could not save contact: " + error.message);
+      toastError("Could not save contact: " + error.message);
       return false;
     }
     return true;
@@ -43,9 +43,10 @@
     if (!confirm(`Delete ${contact.name}?`)) return;
     const { error } = await sb.from(TABLE).delete().eq("id", contact.id);
     if (error) {
-      alert("Could not delete contact: " + error.message);
+      toastError("Could not delete contact: " + error.message);
       return;
     }
+    toastOk(`Deleted ${contact.name}`);
     await renderContacts();
   }
 
@@ -102,6 +103,7 @@
     });
     if (!ok) return;
 
+    toastOk(editingId ? `Saved ${name}` : `Added ${name}`);
     showForm(false);
     await renderContacts();
   }

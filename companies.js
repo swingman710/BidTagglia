@@ -49,7 +49,7 @@ const COMPANY_INDUSTRIES = [
       : await sb.from(TABLE).insert({ name, ...patch });
 
     if (error) {
-      alert("Could not save company: " + error.message);
+      toastError("Could not save company: " + error.message);
       return false;
     }
     return true;
@@ -223,6 +223,7 @@ const COMPANY_INDUSTRIES = [
 
   async function saveOpenCompany() {
     if (!editingName) return;
+    const editing = editingName; // closeCompany() clears it before the toast
     const ok = await saveCompany(editingName, {
       type: $("c-type").value || null,
       industry: $("c-industry").value || null,
@@ -232,6 +233,7 @@ const COMPANY_INDUSTRIES = [
     });
     if (!ok) return;
     closeCompany();
+    toastOk(`Saved ${editing}`);
     await renderCompanies();
   }
 
