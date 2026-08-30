@@ -443,23 +443,57 @@ function renderStatusMenu() {
   if (!menu) return;
   menu.innerHTML = "";
 
-  for (const status of allStatuses()) {
+  const counts = new Map();
+  for (const o of loadOpps()) {
+    const s = o.status || "Unspecified";
+    counts.set(s, (counts.get(s) || 0) + 1);
+  }
+
+  const head = document.createElement("div");
+  head.className = "status-menu-head";
+  const shown = [...counts].reduce(
+    (n, [s, c]) => (hiddenStatuses.has(s) ? n : n + c),
+    0
+  );
+  head.innerHTML =
+    "<span>Show statuses</span>" +
+    `<span class="shown-count">${shown.toLocaleString()} of ` +
+    `${loadOpps().length.toLocaleString()} bids</span>`;
+  menu.appendChild(head);
+
+  // Busiest statuses first — the ones worth hiding are the ones with the most
+  // behind them.
+  const statuses = allStatuses().sort(
+    (a, b) => (counts.get(b) || 0) - (counts.get(a) || 0) || a.localeCompare(b)
+  );
+
+  for (const status of statuses) {
     const row = document.createElement("label");
     row.className = "status-opt";
+    const on = !hiddenStatuses.has(status);
+    row.classList.toggle("is-off", !on);
+
     const cb = document.createElement("input");
     cb.type = "checkbox";
-    cb.checked = !hiddenStatuses.has(status);
+    cb.checked = on;
     cb.addEventListener("change", () => {
       if (cb.checked) hiddenStatuses.delete(status);
       else hiddenStatuses.add(status);
       saveHidden();
+      renderStatusMenu(); // refresh the counts and dimming
       updateStatusButton();
       render();
     });
+
     const pill = document.createElement("span");
     pill.className = `status ${statusClass(status)}`;
     pill.textContent = status;
-    row.append(cb, pill);
+
+    const n = document.createElement("span");
+    n.className = "opt-count";
+    n.textContent = (counts.get(status) || 0).toLocaleString();
+
+    row.append(cb, pill, n);
     menu.appendChild(row);
   }
 

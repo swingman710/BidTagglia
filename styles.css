@@ -767,25 +767,50 @@ textarea:focus {
 .status-menu {
   position: absolute;
   right: 0;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   z-index: 40;
-  min-width: 230px;
+  width: 268px;
   background: var(--surface);
   border: 1px solid var(--border-2);
-  border-radius: 6px;
+  border-radius: 8px;
   box-shadow: var(--shadow-md);
-  padding: 8px;
-  display: flex;
+  padding: 6px;
+  /* Kept off until the hidden attribute is removed — a bare `display: flex`
+     here would override [hidden] and the menu could never close. */
+  display: none;
   flex-direction: column;
-  gap: 2px;
+}
+
+.status-menu:not([hidden]) {
+  display: flex;
+}
+
+.status-menu-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.status-menu-head .shown-count {
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .status-opt {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 6px;
-  border-radius: 4px;
+  gap: 9px;
+  padding: 6px 9px;
+  border-radius: 5px;
   cursor: pointer;
   font-size: 13px;
 }
@@ -797,6 +822,23 @@ textarea:focus {
 .status-opt input {
   cursor: pointer;
   flex: none;
+  accent-color: var(--blue);
+  width: 15px;
+  height: 15px;
+}
+
+/* An unchecked row is a hidden status — dim it so the state reads at a glance
+   without having to compare checkboxes. */
+.status-opt.is-off .status {
+  opacity: 0.45;
+}
+
+/* How many bids carry this status, so hiding one is an informed choice. */
+.status-opt .opt-count {
+  margin-left: auto;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
 }
 
 .status-menu-actions {
@@ -841,14 +883,21 @@ textarea:focus {
   vector-effect: non-scaling-stroke;
 }
 
+/* `display` on a class beats the browser's [hidden] rule, so anything toggled
+   with the hidden attribute has to opt back in rather than declare display
+   unconditionally. */
 .funnel-filter {
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   gap: 8px;
   padding-top: 8px;
   font-size: 12px;
   color: var(--muted);
+}
+
+.funnel-filter:not([hidden]) {
+  display: flex;
 }
 
 .funnel-clear {
@@ -898,6 +947,18 @@ textarea:focus {
   padding: 0;
   margin-bottom: 22px;
   overflow: hidden;
+}
+
+/* A panel whose heading holds a dropdown can't clip its own contents, or the
+   menu is cut off at the panel edge. The rounding that overflow:hidden was
+   providing moves onto the table wrapper, which clips anyway. */
+.panel.panel-menu {
+  overflow: visible;
+}
+
+.panel.panel-menu .table-wrap {
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
 }
 
 .panel h2 {
