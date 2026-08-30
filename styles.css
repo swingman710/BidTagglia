@@ -47,6 +47,12 @@
   --red-border: #f6cccc;
   --line: #e3e7ef;           /* hairline divider */
 
+  /* Chip text sits on a tinted ground, so it needs to be a shade darker than
+     the pill colours above to stay legible at 12.5px. */
+  --chip-amber: #9a4708;
+  --chip-red: #c81e1e;
+  --chip-blue: #2a5ec2;
+
   --ring: 0 0 0 3px rgba(69, 125, 242, 0.2);
   --shadow-sm: 0 1px 2px rgba(42, 48, 64, 0.06);
   --shadow-md: 0 8px 24px rgba(42, 48, 64, 0.12);
@@ -766,28 +772,52 @@ textarea:focus {
   flex-wrap: wrap;
   align-items: center;
   gap: 7px;
-  margin-bottom: 14px;
+  margin-left: 6px;
 }
 
+/* Each chip is tinted by what it means — amber for work coming due, red for
+   dates already missed, blue for a personal lens — so the row reads as
+   severity at a glance instead of three identical outlines. Selecting one
+   fills it in. */
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   padding: 5px 12px;
-  border: 1px solid var(--border-2);
+  border: 1px solid var(--chip-line);
   border-radius: 999px;
-  background: var(--surface);
+  background: var(--chip-bg);
   font-family: var(--sans);
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--chip-ink);
   cursor: pointer;
   transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
 }
 
+.chip.warn {
+  --chip-ink: var(--chip-amber);
+  --chip-bg: var(--amber-soft);
+  --chip-line: var(--border-2); /* fallback where color-mix is unsupported */
+  --chip-line: color-mix(in srgb, var(--amber) 35%, transparent);
+}
+
+.chip.bad {
+  --chip-ink: var(--chip-red);
+  --chip-bg: var(--red-soft);
+  --chip-line: var(--border-2); /* fallback where color-mix is unsupported */
+  --chip-line: color-mix(in srgb, var(--red) 35%, transparent);
+}
+
+.chip.info {
+  --chip-ink: var(--chip-blue);
+  --chip-bg: var(--blue-soft);
+  --chip-line: var(--border-2); /* fallback where color-mix is unsupported */
+  --chip-line: color-mix(in srgb, var(--blue) 35%, transparent);
+}
+
 .chip:hover {
-  border-color: var(--blue);
-  color: var(--blue-dark);
+  border-color: var(--chip-ink);
 }
 
 .chip:focus-visible {
@@ -795,10 +825,11 @@ textarea:focus {
   box-shadow: var(--ring);
 }
 
+/* Selected: the tint becomes the fill. */
 .chip.is-on {
-  border-color: var(--blue);
-  background: var(--blue-soft);
-  color: var(--blue-dark);
+  background: var(--chip-ink);
+  border-color: var(--chip-ink);
+  color: var(--surface);
 }
 
 /* How many bids the chip would show. Dimmed when it would show none, so a
@@ -806,15 +837,11 @@ textarea:focus {
 .chip .chip-n {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  color: var(--faint);
-}
-
-.chip.is-on .chip-n {
-  color: var(--blue-dark);
+  opacity: 0.75;
 }
 
 .chip.is-empty {
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 /* ---- Settings menu (brand header) ---- */

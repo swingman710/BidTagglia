@@ -490,6 +490,7 @@ const ACTIVE_SET = new Set(ACTIVE_STATUSES);
 const QUICK_FILTERS = {
   due: {
     label: "Due this week",
+    tone: "warn", // getting close
     match: (o) => {
       if (!ACTIVE_SET.has(o.status)) return false;
       const d = daysUntil(o.bidDueDate);
@@ -498,6 +499,7 @@ const QUICK_FILTERS = {
   },
   overdue: {
     label: "Overdue",
+    tone: "bad", // a date has already passed
     match: (o) => {
       // Still being worked, but the date has passed — these need a decision.
       if (!ACTIVE_SET.has(o.status)) return false;
@@ -507,6 +509,7 @@ const QUICK_FILTERS = {
   },
   mine: {
     label: "My bids",
+    tone: "info", // not a warning, just a lens
     match: (o) => {
       const me = (BBAccess.account && BBAccess.account.name) || "";
       if (!me) return false;
@@ -530,7 +533,7 @@ function renderChips() {
     const n = opps.filter(def.match).length;
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "chip";
+    btn.className = `chip ${def.tone}`;
     btn.classList.toggle("is-on", activeChip === key);
     btn.classList.toggle("is-empty", n === 0 && activeChip !== key);
     btn.setAttribute("aria-pressed", String(activeChip === key));
