@@ -65,7 +65,9 @@ function setTheme(dark) {
 // behind an OS dialog until it's dismissed. Errors stay until dismissed
 // because they usually need reading; confirmations clear themselves.
 //
-// Destructive confirmations stay as confirm() — those should block.
+// Deletes offer an undo on the toast instead. The two that stay behind a
+// confirm() are the ones undo can't honestly cover: deleting an opportunity
+// takes its quotes and team with it, and removing a user revokes access.
 
 function toast(message, { type = "info", timeout } = {}) {
   let host = document.getElementById("toasts");
@@ -111,6 +113,35 @@ function toast(message, { type = "info", timeout } = {}) {
 
 const toastError = (msg) => toast(msg, { type: "error" });
 const toastOk = (msg) => toast(msg, { type: "ok" });
+
+// A toast carrying an action, used for undo after a delete. The window is
+// short and the row is already gone from the database — undo re-inserts it,
+// which is why the caller has to hand over the whole row, not just its id.
+function toastUndo(message, onUndo, { timeout = 7000 } = {}) {
+  const dismiss = toast(message, { type: "ok", timeout });
+
+  // Read the container only after toast() has run — it creates the container
+  // on first use, so looking it up beforehand finds nothing.
+  const host = document.getElementById("toasts");
+  const el = host && host.lastElementChild;
+  if (!el || !el.classList.contains("toast")) return dismiss;
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "toast-action";
+  btn.textContent = "Undo";
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    dismiss();
+    try {
+      await onUndo();
+    } catch (e) {
+      toastError("Could not undo: " + (e.message || e));
+    }
+  });
+  el.insertBefore(btn, el.querySelector(".toast-x"));
+  return dismiss;
+}
 
 // ---------- Opportunity storage (Supabase) ----------
 // Each bid is one row: { id, created_at, data: <bid object> }. We keep an
@@ -476,6 +507,76 @@ function renderRowLimitNote(shown, total) {
   note.textContent =
     `Showing the first ${shown.toLocaleString()} of ${total.toLocaleString()} ` +
     "— sort or filter to bring what you need to the top.";
+}
+
+// ---------- Estimator workload ----------
+// Bid due dates cluster: in the imported history there are 39 days where one
+// estimator had four or more bids due, and one with eight. Assigning someone
+// is really a capacity decision, so the form says what else they are carrying
+// that week before the bid is saved.
+
+// Monday-to-Sunday window around a date, as YYYY-MM-DD bounds.
+function weekBounds(dateStr) {
+  const d = new Date(`${String(dateStr).split("T")[0]}T00:00:00`);
+  if (isNaN(d)) return null;
+  const dow = (d.getDay() + 6) % 7; // Monday = 0
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - dow);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const iso = (x) =>
+    `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-` +
+    String(x.getDate()).padStart(2, "0");
+  return { from: iso(monday), to: iso(sunday) };
+}
+
+// Bids the estimator already has due that week, excluding the one being
+// edited — a bid shouldn't count itself as competition for its own estimator.
+function workloadFor(estimator, dueDate, exceptId) {
+  const week = weekBounds(dueDate);
+  if (!estimator || !week) return null;
+  const name = estimator.trim().toLowerCase();
+
+  const sameWeek = loadOpps().filter((o) => {
+    if (String(o.id) === String(exceptId)) return false;
+    if ((o.leadEstimator || "").trim().toLowerCase() !== name) return false;
+    if (!ACTIVE_SET.has(o.status)) return false; // decided bids aren't work
+    const due = String(o.bidDueDate || "").split("T")[0];
+    return due >= week.from && due <= week.to;
+  });
+
+  return {
+    week,
+    total: sameWeek.length,
+    sameDay: sameWeek.filter(
+      (o) => String(o.bidDueDate || "").split("T")[0] === String(dueDate).split("T")[0]
+    ).length,
+  };
+}
+
+function updateWorkloadNote() {
+  const note = document.getElementById("workload-note");
+  if (!note) return;
+  const load = workloadFor(
+    val("f-lead-estimator"),
+    val("f-due-date"),
+    editingId
+  );
+
+  if (!load || load.total === 0) {
+    note.hidden = true;
+    return;
+  }
+
+  const who = val("f-lead-estimator").trim();
+  const bids = `${load.total} other bid${load.total === 1 ? "" : "s"}`;
+  note.textContent =
+    load.sameDay > 0
+      ? `${who} already has ${bids} due that week — ${load.sameDay} on the same day.`
+      : `${who} already has ${bids} due that week.`;
+  // Three or more in a week is where it stops being routine.
+  note.className = `field-note ${load.total >= 3 || load.sameDay >= 2 ? "warn" : ""}`;
+  note.hidden = false;
 }
 
 // ---------- Quick filters ----------
@@ -1520,6 +1621,15 @@ function buildForm(opp) {
 
 document.getElementById("f-status").addEventListener("change", updateReasonMsg);
 
+// The workload note depends on both fields, so watch each of them.
+for (const id of ["f-lead-estimator", "f-due-date"]) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener("input", updateWorkloadNote);
+    el.addEventListener("change", updateWorkloadNote);
+  }
+}
+
 // ---------- Modal ----------
 
 // The opportunity currently being edited (null = creating a new one).
@@ -1586,6 +1696,7 @@ function openModal(opp) {
   // Deleting only makes sense for a bid that's already saved.
   document.getElementById("modal-delete").hidden = editingId == null;
 
+  updateWorkloadNote();
   modal.hidden = false;
   document.getElementById("f-name").focus();
 }
@@ -1681,6 +1792,298 @@ function detailSections(o) {
 
 // ----- Opportunity tab (read-only fields + Edit) -----
 
+// ---------- Print view ----------
+// A one-page bid sheet to take into a pre-bid meeting. Built as its own
+// document rather than a print stylesheet over the app: the dashboard's
+// modal, tabs and dark theme all have to be undone for print anyway, and a
+// standalone page is far easier to keep looking deliberate.
+
+function printEsc(v) {
+  return String(v ?? "").replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
+function printBid(o) {
+  const quotes = quotesCache
+    .filter((q) => String(q.opportunity_id) === String(o.id))
+    .sort((a, b) => (b.price || 0) - (a.price || 0));
+
+  const field = (label, value) =>
+    `<div class="f"><dt>${printEsc(label)}</dt><dd>${printEsc(value)}</dd></div>`;
+
+  const block = (title, rows) => {
+    const filled = rows.filter(([, v]) => v && v !== "—");
+    if (!filled.length) return "";
+    return (
+      `<section><h2>${printEsc(title)}</h2><dl>` +
+      filled.map(([l, v]) => field(l, v)).join("") +
+      `</dl></section>`
+    );
+  };
+
+  const days = daysUntil(o.bidDueDate);
+  const countdown =
+    days === null || NO_COUNTDOWN_STATUSES.has(o.status)
+      ? ""
+      : days < 0
+        ? `${Math.abs(days)} days past due`
+        : days === 0
+          ? "Due today"
+          : `${days} days remaining`;
+
+  const quoteRows = quotes.length
+    ? `<section class="wide"><h2>Pricing</h2><table>
+         <thead><tr><th>Company</th><th>Type</th><th class="n">Price</th>
+         <th>Sent</th><th>Status</th></tr></thead><tbody>` +
+      quotes
+        .map(
+          (q) =>
+            `<tr><td>${printEsc(q.company || "—")}</td>` +
+            `<td>${q.type === "budgetary" ? "Budgetary" : "Proposal"}</td>` +
+            `<td class="n">${printEsc(q.price == null ? "—" : currency.format(q.price))}</td>` +
+            `<td>${printEsc(q.price_sent_on ? formatDate(q.price_sent_on) : "—")}</td>` +
+            `<td>${printEsc(q.status || "—")}</td></tr>`
+        )
+        .join("") +
+      `</tbody></table></section>`
+    : "";
+
+  const doc = `<!doctype html><html><head><meta charset="utf-8">
+<title>${printEsc(o.name || "Bid")}</title>
+<style>
+  @page { margin: 14mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font: 11px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1a1f2b;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Masthead: the two things you need at a glance, then everything else. */
+  .head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 24px; padding-bottom: 14px; border-bottom: 2px solid #1a1f2b;
+  }
+  .head h1 { font-size: 21px; line-height: 1.2; letter-spacing: -0.2px; }
+  .sub { margin-top: 5px; font-size: 11px; color: #5b6474; }
+  .brand { font-size: 9px; font-weight: 700; letter-spacing: 2px;
+           text-transform: uppercase; color: #8a93a3; text-align: right;
+           white-space: nowrap; }
+
+  .due { margin-top: 10px; text-align: right; white-space: nowrap; }
+  .due .d { font-size: 17px; font-weight: 700; }
+  .due .c { font-size: 10px; color: #5b6474; margin-top: 2px; }
+
+  /* Headline figures in a row under the masthead. */
+  .figures { display: flex; gap: 1px; background: #dfe3ea;
+             border: 1px solid #dfe3ea; margin: 14px 0 18px; }
+  .fig { flex: 1; background: #fff; padding: 9px 11px; }
+  .fig .k { font-size: 8px; font-weight: 700; letter-spacing: 1px;
+            text-transform: uppercase; color: #8a93a3; }
+  .fig .v { font-size: 14px; font-weight: 700; margin-top: 3px; }
+
+  /* Two columns of field blocks; wide blocks span both. */
+  .body { column-count: 2; column-gap: 22px; }
+  section { break-inside: avoid; margin-bottom: 15px; }
+  section.wide { column-span: all; }
+  h2 { font-size: 9px; font-weight: 700; letter-spacing: 1.2px;
+       text-transform: uppercase; color: #8a93a3;
+       padding-bottom: 4px; margin-bottom: 7px; border-bottom: 1px solid #e4e7ee; }
+
+  dl { display: grid; gap: 5px 0; }
+  .f { display: grid; grid-template-columns: 92px 1fr; gap: 10px;
+       align-items: baseline; }
+  dt { font-size: 9.5px; color: #78818f; }
+  dd { font-size: 10.5px; font-weight: 500; overflow-wrap: anywhere; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 8px; font-weight: 700; letter-spacing: 0.8px;
+       text-transform: uppercase; color: #8a93a3; text-align: left;
+       padding: 5px 7px; border-bottom: 1px solid #cfd5e0; }
+  td { font-size: 10px; padding: 5px 7px; border-bottom: 1px solid #eef0f5; }
+  .n { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .notes { white-space: pre-wrap; font-size: 10px; line-height: 1.55; }
+
+  footer { margin-top: 16px; padding-top: 8px; border-top: 1px solid #e4e7ee;
+           font-size: 8.5px; color: #98a0ae; display: flex;
+           justify-content: space-between; }
+</style></head><body>
+
+<div class="head">
+  <div>
+    <h1>${printEsc(o.name || "Opportunity")}</h1>
+    <div class="sub">${printEsc(
+      [o.internalBidNumber, o.division, o.status].filter(Boolean).join("  ·  ")
+    )}</div>
+  </div>
+  <div>
+    <div class="brand">battag.bid</div>
+    <div class="due">
+      <div class="d">${printEsc(formatDueDateTime(o.bidDueDate, o.bidDueTime))}</div>
+      ${countdown ? `<div class="c">${printEsc(countdown)}</div>` : ""}
+    </div>
+  </div>
+</div>
+
+<div class="figures">
+  <div class="fig"><div class="k">Project value</div>
+    <div class="v">${printEsc(currency.format(oppValue(o)))}</div></div>
+  <div class="fig"><div class="k">Lead estimator</div>
+    <div class="v">${printEsc(o.leadEstimator || "—")}</div></div>
+  <div class="fig"><div class="k">Owner / customer</div>
+    <div class="v">${printEsc(o.ownerCustomer || "—")}</div></div>
+</div>
+
+<div class="body">
+  ${block("Project team", [
+    ["CM", fmtList(o.cm)],
+    ["GC", fmtList(o.gc)],
+    ["Architect", o.architect],
+    ["Engineer", o.engineer],
+    ["Project manager", o.projectManager],
+    ["Local unions", fmtList(o.localUnions)],
+  ])}
+  ${block("Location", [
+    ["Address", o.projectAddress],
+    ["City", o.city],
+    ["State", o.state],
+    ["Zip", o.zipCode],
+  ])}
+  ${block("Classification", [
+    ["Market segment", o.marketSegment],
+    ["Industry", o.industry],
+    ["Bid type", o.bidType],
+    ["Delivery", o.deliveryMethod],
+    ["Requirements", fmtList(o.flags)],
+  ])}
+  ${block("Budget & schedule", [
+    ["Budgeted value", o.budgetedProjectValue ? fmtMoney(o.budgetedProjectValue) : ""],
+    ["Budgeted cost", o.budgetedCost ? fmtMoney(o.budgetedCost) : ""],
+    ["Final price", o.finalPrice ? fmtMoney(o.finalPrice) : ""],
+    ["Labor hours", o.budgetedLaborHours ? fmtNum(o.budgetedLaborHours) : ""],
+    ["Square footage", o.budgetedSquareFootage ? fmtNum(o.budgetedSquareFootage) : ""],
+    ["Starts", o.estStartDate ? formatDate(o.estStartDate) : ""],
+    ["Ends", o.estEndDate ? formatDate(o.estEndDate) : ""],
+    ["Docs received", o.docsReceivedDate ? formatDate(o.docsReceivedDate) : ""],
+  ])}
+  ${quoteRows}
+  ${
+    o.description
+      ? `<section class="wide"><h2>Description / Notes</h2>
+         <div class="notes">${printEsc(o.description)}</div></section>`
+      : ""
+  }
+</div>
+
+<footer>
+  <span>${printEsc(o.name || "")}</span>
+  <span>Printed ${printEsc(new Date().toLocaleString())}</span>
+</footer>
+</body></html>`;
+
+  const w = window.open("", "_blank");
+  if (!w) {
+    toastError("Your browser blocked the print window — allow pop-ups for this site.");
+    return;
+  }
+  w.document.write(doc);
+  w.document.close();
+  // Wait for layout before printing, or the dialog can open on a blank page.
+  w.addEventListener("load", () => {
+    w.focus();
+    w.print();
+  });
+}
+
+// ---------- Track record ----------
+// Win/loss history against whoever this bid involves, shown on the bid itself.
+// Reports can already work this out, but the useful moment is while you are
+// looking at the job — not in a report opened separately, if at all.
+
+function recordAgainst(match, exceptId) {
+  let won = 0;
+  let lost = 0;
+  for (const o of loadOpps()) {
+    if (String(o.id) === String(exceptId)) continue;
+    if (!match(o)) continue;
+    if (o.status === "Won") won++;
+    else if (o.status === "Lost") lost++;
+  }
+  return { won, lost, decided: won + lost };
+}
+
+function renderTrackRecord(o, mount) {
+  const cards = [];
+
+  const owner = (o.ownerCustomer || "").trim();
+  if (owner) {
+    cards.push([
+      owner,
+      "as owner / customer",
+      recordAgainst(
+        (x) => (x.ownerCustomer || "").trim().toLowerCase() === owner.toLowerCase(),
+        o.id
+      ),
+    ]);
+  }
+
+  // Companies this bid was priced to, from the Pricing tab.
+  const quoted = new Set(
+    quotesCache
+      .filter((q) => String(q.opportunity_id) === String(o.id))
+      .map((q) => canonicalCompany(q.company))
+      .filter(Boolean)
+  );
+  for (const company of quoted) {
+    const key = companyKey(company);
+    // Bids priced to the same company, found through their quotes.
+    const oppIds = new Set(
+      quotesCache
+        .filter((q) => companyKey(canonicalCompany(q.company)) === key)
+        .map((q) => String(q.opportunity_id))
+    );
+    cards.push([
+      company,
+      "as company bid to",
+      recordAgainst((x) => oppIds.has(String(x.id)), o.id),
+    ]);
+  }
+
+  const useful = cards.filter(([, , r]) => r.decided > 0);
+  if (!useful.length) return;
+
+  const sec = document.createElement("section");
+  sec.className = "detail-section";
+  const h = document.createElement("h3");
+  h.textContent = "Track record";
+  sec.appendChild(h);
+
+  const wrap = document.createElement("div");
+  wrap.className = "record-grid";
+
+  for (const [name, role, r] of useful) {
+    const rate = Math.round((r.won / r.decided) * 100);
+    const card = document.createElement("div");
+    card.className =
+      "record-card " + (rate >= 50 ? "good" : rate >= 25 ? "mid" : "poor");
+    card.innerHTML =
+      `<div class="record-top"><span class="record-name"></span>` +
+      `<span class="record-rate">${rate}%</span></div>` +
+      `<div class="record-role"></div>` +
+      `<div class="record-bar"><span style="width:${rate}%"></span></div>` +
+      `<div class="record-tally">${r.won} won · ${r.lost} lost` +
+      ` <span class="record-of">of ${r.decided} decided</span></div>`;
+    // Company and owner names are free text, so set them as text, not markup.
+    card.querySelector(".record-name").textContent = name;
+    card.querySelector(".record-role").textContent = role;
+    wrap.appendChild(card);
+  }
+
+  sec.appendChild(wrap);
+  mount.appendChild(sec);
+}
+
 function renderDetail(o) {
   document.getElementById("detail-title").textContent = o.name || "Opportunity";
   const pane = document.getElementById("pane-opportunity");
@@ -1697,8 +2100,15 @@ function renderDetail(o) {
     closeDetail();
     openModal(opp);
   });
-  bar.appendChild(editBtn);
+  const printBtn = document.createElement("button");
+  printBtn.type = "button";
+  printBtn.className = "btn-ghost sm";
+  printBtn.textContent = "Print";
+  printBtn.addEventListener("click", () => printBid(o));
+  bar.append(editBtn, printBtn);
   pane.appendChild(bar);
+
+  renderTrackRecord(o, pane);
 
   for (const [title, fields] of detailSections(o)) {
     const sec = document.createElement("section");
@@ -1828,8 +2238,16 @@ async function updatePricing(id, patch) {
   return true;
 }
 
+// Deletes now offer an undo instead of a confirm dialog: one less click when
+// it was intended, still recoverable when it wasn't. The row is read back
+// first so it can be put returned — the id is not enough, the whole row is.
 async function deletePricing(id) {
-  if (!confirm("Delete this price quote?")) return;
+  const { data: row } = await sb
+    .from(PRICING_TABLE)
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
   const { error } = await sb.from(PRICING_TABLE).delete().eq("id", id);
   if (error) {
     toastError("Could not delete price: " + error.message);
@@ -1837,6 +2255,19 @@ async function deletePricing(id) {
   }
   pricingDirty = true;
   renderPricing();
+
+  if (!row) return;
+  const { id: _drop, ...values } = row; // let the database assign a fresh id
+  toastUndo(`Deleted the ${row.company || "price"} quote`, async () => {
+    const { error: err } = await sb.from(PRICING_TABLE).insert(values);
+    if (err) {
+      toastError("Could not restore the quote: " + err.message);
+      return;
+    }
+    pricingDirty = true;
+    renderPricing();
+    toastOk("Quote restored");
+  });
 }
 
 const QUOTE_STATUSES = ["Draft", "Sent", "Lost", "Withdrawn"];

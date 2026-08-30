@@ -54,14 +54,23 @@ const ACTIVITY_TYPES = [
   }
 
   async function deleteActivity(activity) {
-    if (!confirm(`Delete “${activity.title}”?`)) return;
     const { error } = await sb.from(TABLE).delete().eq("id", activity.id);
     if (error) {
       toastError("Could not delete activity: " + error.message);
       return;
     }
-    toastOk(`Deleted “${activity.title}”`);
     await renderActivities();
+
+    const { id: _drop, ...values } = activity;
+    toastUndo(`Deleted “${activity.title}”`, async () => {
+      const { error: err } = await sb.from(TABLE).insert(values);
+      if (err) {
+        toastError("Could not restore the activity: " + err.message);
+        return;
+      }
+      await renderActivities();
+      toastOk("Activity restored");
+    });
   }
 
   // ---------- Looking bids and contacts up by their typed label ----------

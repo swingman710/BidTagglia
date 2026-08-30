@@ -40,14 +40,24 @@
   }
 
   async function deleteContact(contact) {
-    if (!confirm(`Delete ${contact.name}?`)) return;
     const { error } = await sb.from(TABLE).delete().eq("id", contact.id);
     if (error) {
       toastError("Could not delete contact: " + error.message);
       return;
     }
-    toastOk(`Deleted ${contact.name}`);
     await renderContacts();
+
+    // The row is already in memory, so undo just puts it back.
+    const { id: _drop, ...values } = contact;
+    toastUndo(`Deleted ${contact.name}`, async () => {
+      const { error: err } = await sb.from(TABLE).insert(values);
+      if (err) {
+        toastError("Could not restore the contact: " + err.message);
+        return;
+      }
+      await renderContacts();
+      toastOk(`${contact.name} restored`);
+    });
   }
 
   // ---------- Form ----------

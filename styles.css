@@ -725,6 +725,121 @@ textarea:focus {
   }
 }
 
+.toast-action {
+  flex: none;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--blue-dark);
+  cursor: pointer;
+}
+
+.toast-action:hover {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+/* ==========================================================================
+   TRACK RECORD
+   Win/loss against the owner and each company bid to, on the bid itself.
+   ========================================================================== */
+
+.record-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.record-card {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--rec);
+  border-radius: 6px;
+  background: var(--page-bg);
+  padding: 11px 13px;
+}
+
+.record-card.good {
+  --rec: var(--green);
+}
+.record-card.mid {
+  --rec: var(--amber);
+}
+.record-card.poor {
+  --rec: var(--red);
+}
+
+.record-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.record-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-rate {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--rec);
+  font-variant-numeric: tabular-nums;
+}
+
+.record-role {
+  font-size: 10.5px;
+  color: var(--faint);
+  margin-top: 1px;
+}
+
+.record-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  margin: 9px 0 7px;
+  overflow: hidden;
+}
+
+.record-bar span {
+  display: block;
+  height: 100%;
+  background: var(--rec);
+  border-radius: inherit;
+}
+
+.record-tally {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.record-of {
+  font-weight: 400;
+  color: var(--faint);
+}
+
+/* ---- Workload warning under the lead estimator field ---- */
+
+.field-note {
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.field-note.warn {
+  color: var(--amber);
+  font-weight: 600;
+}
+
 /* ==========================================================================
    LOADING STATE
    Placeholder rows while the first fetch runs, so the table doesn't sit
