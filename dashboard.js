@@ -1585,10 +1585,17 @@ function updateReasonMsg() {
   document.getElementById("reason-msg").hidden = !reasonRequired();
 }
 
+// Where a bid starts: it's been received and not yet worked. Bidding is set
+// for you when the first price goes out (see updatePricingStatus).
+const DEFAULT_STATUS = "Pending";
+
 function buildForm(opp) {
   // Dropdowns
   fillSelect("f-division", FIELD_LISTS.division);
   fillSelect("f-status", FIELD_LISTS.opportunityStatus);
+  // A new bid starts at Pending rather than blank; an existing one is filled
+  // in by populateForm() straight after this.
+  if (!opp) document.getElementById("f-status").value = DEFAULT_STATUS;
   fillSelect("f-bid-type", FIELD_LISTS.bidType);
   fillSelect("f-delivery-method", FIELD_LISTS.deliveryMethod);
   fillSelect("f-state", STATES);
@@ -1791,6 +1798,103 @@ function detailSections(o) {
 }
 
 // ----- Opportunity tab (read-only fields + Edit) -----
+
+// ---------- Status stepper ----------
+// The pipeline a bid actually walks, in order. Clicking a stage moves the bid
+// there — forward to advance it, back if it was moved by mistake.
+//
+// The outcomes below are off-ramps rather than stages: a bid leaves the
+// pipeline into one of them from wherever it happens to be.
+
+const STATUS_FLOW = ["Future Opportunity", "Pending", "Bidding", "Budgeting"];
+const STATUS_OUTCOMES = ["Won", "Lost", "No Bid", "On Hold (Bid)", "Cancelled"];
+
+async function setOppStatus(o, status) {
+  if (!o || o.status === status) return;
+  const previous = o.status;
+
+  const { error } = await sb
+    .from(SUPABASE_TABLE)
+    .update({ status })
+    .eq("id", o.id);
+  if (error) {
+    toastError("Could not change the status: " + error.message);
+    return;
+  }
+
+  o.status = status;
+  // Keep the cached row in step so the table and charts agree without a
+  // full reload.
+  const cached = oppsCache.find((x) => String(x.id) === String(o.id));
+  if (cached) cached.status = status;
+
+  renderDetail(o);
+  render();
+  renderCharts(oppsCache);
+  renderChips();
+
+  toastUndo(`Moved to ${status}`, async () => {
+    const { error: err } = await sb
+      .from(SUPABASE_TABLE)
+      .update({ status: previous })
+      .eq("id", o.id);
+    if (err) {
+      toastError("Could not undo: " + err.message);
+      return;
+    }
+    o.status = previous;
+    if (cached) cached.status = previous;
+    renderDetail(o);
+    render();
+    renderCharts(oppsCache);
+    renderChips();
+  });
+}
+
+function renderStatusStepper(o, mount) {
+  const wrap = document.createElement("div");
+  wrap.className = "opp-status";
+
+  const current = o.status || "";
+  const inFlow = STATUS_FLOW.indexOf(current);
+
+  const steps = document.createElement("div");
+  steps.className = "opp-steps";
+  STATUS_FLOW.forEach((stage, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "opp-step";
+    if (stage === current) b.classList.add("is-here");
+    // Everything before the current stage reads as done — but only when the
+    // bid is actually somewhere on this path.
+    else if (inFlow > -1 && i < inFlow) b.classList.add("is-done");
+    b.textContent = stage;
+    b.title =
+      stage === current ? `Already ${stage}` : `Move this bid to ${stage}`;
+    b.addEventListener("click", () => setOppStatus(o, stage));
+    steps.appendChild(b);
+  });
+
+  const outs = document.createElement("div");
+  outs.className = "opp-outcomes";
+  const label = document.createElement("span");
+  label.className = "opp-outcome-label";
+  label.textContent = "Close as";
+  outs.appendChild(label);
+
+  for (const status of STATUS_OUTCOMES) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `opp-outcome ${statusClass(status)}`;
+    if (status === current) b.classList.add("is-here");
+    b.textContent = status;
+    b.addEventListener("click", () => setOppStatus(o, status));
+    outs.appendChild(b);
+  }
+
+  wrap.append(steps, outs);
+  mount.appendChild(wrap);
+}
 
 // ---------- Print view ----------
 // A one-page bid sheet to take into a pre-bid meeting. Built as its own
@@ -2108,6 +2212,7 @@ function renderDetail(o) {
   bar.append(editBtn, printBtn);
   pane.appendChild(bar);
 
+  renderStatusStepper(o, pane);
   renderTrackRecord(o, pane);
 
   for (const [title, fields] of detailSections(o)) {
@@ -2217,6 +2322,10 @@ async function addPricing(row) {
   pricingDirty = true;
 }
 
+// Statuses a bid can be moved on from automatically. Once it's Budgeting, Won,
+// Lost or on hold, someone has made a decision the app shouldn't overrule.
+const AUTO_ADVANCE_FROM = new Set(["Future Opportunity", "Pending"]);
+
 async function updatePricingStatus(id, status) {
   const { error } = await sb.from(PRICING_TABLE).update({ status }).eq("id", id);
   if (error) {
@@ -2224,6 +2333,17 @@ async function updatePricingStatus(id, status) {
     return;
   }
   renderPricing();
+
+  // Sending a price is the moment a bid becomes a live bid, so move it on —
+  // but only from a status that hasn't been decided yet, and say so, since
+  // changing something the person didn't ask to change needs to be visible.
+  if (status === "Sent" && detailOpp && AUTO_ADVANCE_FROM.has(detailOpp.status)) {
+    const previous = detailOpp.status;
+    await setOppStatus(detailOpp, "Bidding");
+    if (detailOpp.status === "Bidding") {
+      toast(`Price sent — moved this bid from ${previous} to Bidding`);
+    }
+  }
 }
 
 async function updatePricing(id, patch) {

@@ -744,6 +744,161 @@ textarea:focus {
 }
 
 /* ==========================================================================
+   OPPORTUNITY STATUS STEPPER
+   The pipeline as connected chevrons at the top of a bid: click a stage to
+   move the bid there. Outcomes sit below as a separate row, because leaving
+   the pipeline is a different kind of action from moving along it.
+   ========================================================================== */
+
+.opp-status {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--page-bg);
+}
+
+.opp-steps {
+  display: flex;
+  align-items: stretch;
+}
+
+.opp-step {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px 9px 20px;
+  border: none;
+  background: var(--band);
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  /* Arrow shape, with each step notched into the one before it. */
+  clip-path: polygon(
+    0 0,
+    calc(100% - 11px) 0,
+    100% 50%,
+    calc(100% - 11px) 100%,
+    0 100%,
+    11px 50%
+  );
+  margin-right: -9px;
+}
+
+.opp-step:first-child {
+  padding-left: 14px;
+  border-radius: 5px 0 0 5px;
+  clip-path: polygon(0 0, calc(100% - 11px) 0, 100% 50%, calc(100% - 11px) 100%, 0 100%);
+}
+
+.opp-step:last-child {
+  margin-right: 0;
+  border-radius: 0 5px 5px 0;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 11px 50%);
+}
+
+.opp-step:hover {
+  background: var(--band-2);
+  color: var(--ink);
+}
+
+/* Stages already passed. */
+.opp-step.is-done {
+  background: var(--blue-soft);
+  color: var(--blue-dark);
+}
+
+/* Where the bid is now. */
+.opp-step.is-here {
+  background: var(--blue);
+  color: #fff;
+}
+
+.opp-step:focus-visible {
+  outline: none;
+  box-shadow: inset var(--ring);
+}
+
+.opp-outcomes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.opp-outcome-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-right: 2px;
+}
+
+.opp-outcome {
+  padding: 4px 11px;
+  border: 1px solid var(--border-2);
+  border-radius: 999px;
+  background: var(--surface);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+
+.opp-outcome:hover {
+  color: var(--ink);
+  border-color: var(--muted);
+}
+
+/* The outcome a bid has already landed on, tinted by what it means. */
+.opp-outcome.is-here.won {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--surface);
+}
+
+.opp-outcome.is-here.lost {
+  background: var(--red);
+  border-color: var(--red);
+  color: var(--surface);
+}
+
+.opp-outcome.is-here.hold,
+.opp-outcome.is-here.open {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: var(--surface);
+}
+
+@media (max-width: 640px) {
+  /* Chevrons stop being readable once they're this narrow. */
+  .opp-steps {
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .opp-step,
+  .opp-step:first-child,
+  .opp-step:last-child {
+    clip-path: none;
+    margin-right: 0;
+    border-radius: 5px;
+    padding-left: 14px;
+  }
+}
+
+/* ==========================================================================
    TRACK RECORD
    Win/loss against the owner and each company bid to, on the bid itself.
    ========================================================================== */
