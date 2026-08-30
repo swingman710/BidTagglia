@@ -106,11 +106,6 @@
             <input id="search" type="text" placeholder="Search opportunity, division, estimator or owner" />
           </div>
           <div class="controls-right">
-            <div class="status-picker">
-              <button id="status-toggle" type="button" class="btn-ghost sm"
-                      aria-expanded="false">Hide status</button>
-              <div id="status-menu" class="status-menu" hidden></div>
-            </div>
             <button id="new-opp" class="btn-primary inline">+ New Opportunity</button>
           </div>
         </div>
@@ -157,10 +152,15 @@
           <div class="table-head">
             <h2>Saved opportunities</h2>
             <span id="count" class="count-pill">0</span>
+            <div class="status-picker">
+              <button id="status-toggle" type="button" class="btn-ghost sm"
+                      aria-expanded="false">Hide status</button>
+              <div id="status-menu" class="status-menu" hidden></div>
+            </div>
           </div>
 
           <div class="table-wrap">
-            <table class="bids">
+            <table class="bids opp-table">
               <thead>
                 <tr>
                   <th data-sort="name">Opportunity</th>

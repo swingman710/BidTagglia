@@ -604,6 +604,8 @@ function render() {
 
     const nameTd = document.createElement("td");
     nameTd.textContent = opp.name || "—";
+    // The column truncates, so keep the full name reachable on hover.
+    if (opp.name) nameTd.title = opp.name;
 
     const divTd = document.createElement("td");
     divTd.textContent = opp.division || "—";
@@ -632,6 +634,7 @@ function render() {
     const pmTd = document.createElement("td");
     pmTd.className = "col-pm";
     pmTd.textContent = opp.leadEstimator || "—";
+    if (opp.leadEstimator) pmTd.title = opp.leadEstimator;
 
     const statusTd = document.createElement("td");
     statusTd.className = "col-status";

@@ -914,6 +914,12 @@ textarea:focus {
   border-bottom: 1px solid var(--border);
 }
 
+/* Controls in a panel heading sit at the right-hand end. Panels that already
+   push with a .rep-hint are unaffected — the hint claims the space first. */
+.table-head .status-picker {
+  margin-left: auto;
+}
+
 .count-pill {
   font-size: 12px;
   font-weight: 600;
@@ -1068,6 +1074,70 @@ table.bids td.col-pm,
 table.bids th.col-status,
 table.bids td.col-status {
   width: 190px;
+}
+
+/* ---- Opportunities table: always the width of its panel ----
+   Every column but the name is sized, so the name takes whatever is left and
+   truncates rather than pushing the table wider than the panel and forcing a
+   horizontal scrollbar. Row cells carry the full text as a tooltip. */
+
+table.bids.opp-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+table.bids.opp-table th:nth-child(2),
+table.bids.opp-table td:nth-child(2) {   /* Division */
+  width: 8%;
+}
+
+table.bids.opp-table th:nth-child(3),
+table.bids.opp-table td:nth-child(3) {   /* Bid Due */
+  width: 13%;
+}
+
+table.bids.opp-table th:nth-child(4),
+table.bids.opp-table td:nth-child(4) {   /* Days Until Due */
+  width: 11%;
+}
+
+table.bids.opp-table th:nth-child(5),
+table.bids.opp-table td:nth-child(5) {   /* Project Value */
+  width: 13%;
+}
+
+/* These two override the 190px above — a percentage keeps them in proportion
+   as the window changes instead of stealing room from the name. */
+table.bids.opp-table th.col-pm,
+table.bids.opp-table td.col-pm,
+table.bids.opp-table th.col-status,
+table.bids.opp-table td.col-status {
+  width: 15%;
+}
+
+/* Anything that would overflow its column is cut with an ellipsis rather than
+   widening the table. */
+table.bids.opp-table td,
+table.bids.opp-table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The status pill must not be clipped mid-word when the column is narrow. */
+table.bids.opp-table td.col-status .status {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  /* Below this the sized columns stop fitting comfortably, so let the table
+     find its own width again and scroll inside .table-wrap. */
+  table.bids.opp-table {
+    table-layout: auto;
+    min-width: 900px;
+  }
 }
 
 /* Status pills */
