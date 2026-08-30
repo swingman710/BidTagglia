@@ -69,6 +69,47 @@ const COMPANY_INDUSTRIES = [
     return counts;
   }
 
+  // ---------- Sorting ----------
+  // Same interaction as the other tables: click a heading, click again to
+  // reverse. Bids sorts numerically; blanks collect at the bottom either way.
+
+  let sortBy = "name";
+  let sortDir = 1;
+
+  function sortRows(rows) {
+    return rows.sort((a, b) => {
+      const x = a[sortBy];
+      const y = b[sortBy];
+      const xEmpty = x === null || x === undefined || x === "";
+      const yEmpty = y === null || y === undefined || y === "";
+      if (xEmpty || yEmpty) return xEmpty && yEmpty ? 0 : xEmpty ? 1 : -1;
+      const cmp =
+        typeof x === "number" ? x - y : String(x).localeCompare(String(y));
+      return cmp * sortDir || a.name.localeCompare(b.name);
+    });
+  }
+
+  function setSort(key) {
+    if (sortBy === key) sortDir = -sortDir;
+    else {
+      sortBy = key;
+      sortDir = key === "bids" ? -1 : 1; // most-bid-to first; names A-Z
+    }
+    renderCompanies();
+  }
+
+  function markHeader() {
+    for (const th of document.querySelectorAll(".company-table thead th[data-sort]")) {
+      const active = th.dataset.sort === sortBy;
+      th.classList.toggle("is-sorted", active);
+      th.classList.toggle("desc", active && sortDir === -1);
+      th.setAttribute(
+        "aria-sort",
+        active ? (sortDir === 1 ? "ascending" : "descending") : "none"
+      );
+    }
+  }
+
   // ---------- List ----------
 
   async function renderCompanies() {
@@ -76,15 +117,29 @@ const COMPANY_INDUSTRIES = [
     if (!tbody) return;
     await fetchCompanies();
 
-    const names = knownCompanies();
     const counts = bidCounts();
+    const rows = knownCompanies().map((name) => {
+      const key = companyKey(name);
+      const row = saved.get(key) || {};
+      return {
+        name,
+        key,
+        type: row.type || "",
+        industry: row.industry || "",
+        phone: row.phone || "",
+        website: row.website || "",
+        bids: (counts.get(key) || new Set()).size,
+      };
+    });
+    sortRows(rows);
+    markHeader();
 
-    $("company-count").textContent = names.length;
-    $("company-empty").style.display = names.length ? "none" : "block";
+    $("company-count").textContent = rows.length;
+    $("company-empty").style.display = rows.length ? "none" : "block";
     tbody.innerHTML = "";
 
-    for (const name of names) {
-      const key = companyKey(name);
+    for (const entry of rows) {
+      const { name, key } = entry;
       const row = saved.get(key) || {};
       const tr = document.createElement("tr");
       tr.className = "bid-row";
@@ -118,7 +173,7 @@ const COMPANY_INDUSTRIES = [
 
       const bidsTd = document.createElement("td");
       bidsTd.className = "num";
-      bidsTd.textContent = (counts.get(key) || new Set()).size;
+      bidsTd.textContent = entry.bids;
       tr.appendChild(bidsTd);
 
       tr.addEventListener("click", () => openCompany(name));
@@ -129,6 +184,9 @@ const COMPANY_INDUSTRIES = [
   // ---------- Detail modal ----------
 
   function fillOptions(select, options, value) {
+    // Alphabetical, however the source list happens to be ordered — the type
+    // list ends with Internal and Security Contractor out of place.
+    options = [...options].sort((a, b) => a.localeCompare(b));
     select.innerHTML = "";
     const blank = document.createElement("option");
     blank.value = "";
@@ -188,6 +246,17 @@ const COMPANY_INDUSTRIES = [
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !$("company-modal").hidden) closeCompany();
   });
+
+  for (const th of document.querySelectorAll(".company-table thead th[data-sort]")) {
+    th.tabIndex = 0;
+    th.addEventListener("click", () => setSort(th.dataset.sort));
+    th.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setSort(th.dataset.sort);
+      }
+    });
+  }
 
   onViewOpen("companies", renderCompanies);
 

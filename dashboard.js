@@ -405,8 +405,10 @@ function renderRowLimitNote(shown, total) {
 // and almost never what you opened the dashboard to look at — so they start
 // hidden. The choice is remembered per browser.
 
-const DEFAULT_HIDDEN = ["Lost", "No Bid", "Cancelled"];
-const HIDDEN_KEY = "battag_hidden_statuses";
+const DEFAULT_HIDDEN = ["Lost", "No Bid", "Cancelled", "Won"];
+// Versioned: browsers that saved a choice under the old key would otherwise
+// keep the old default forever and never see this one.
+const HIDDEN_KEY = "battag_hidden_statuses_v2";
 
 function loadHidden() {
   try {
@@ -501,7 +503,12 @@ function renderStatusMenu() {
   actions.className = "status-menu-actions";
   for (const [label, fn] of [
     ["Show all", () => hiddenStatuses.clear()],
-    ["Hide decided", () => DEFAULT_HIDDEN.forEach((s) => hiddenStatuses.add(s))],
+    // Back to the default view: exactly the decided statuses hidden, nothing
+    // else — so it doubles as a reset.
+    ["Hide decided", () => {
+      hiddenStatuses.clear();
+      DEFAULT_HIDDEN.forEach((s) => hiddenStatuses.add(s));
+    }],
   ]) {
     const b = document.createElement("button");
     b.type = "button";
