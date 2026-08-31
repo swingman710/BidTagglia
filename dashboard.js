@@ -1906,6 +1906,138 @@ function printEsc(v) {
   return String(v ?? "").replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
+// The shared shell every printed page uses: page setup, type scale, the
+// masthead, the figure strip and the two-column field grid. Callers supply
+// content, so a bid sheet and a report look like the same document.
+function printDocument({ title, heading, sub, aside, figures = [], body, footer }) {
+  const fig = figures.length
+    ? `<div class="figures">` +
+      figures
+        .map(
+          (f) =>
+            `<div class="fig"><div class="k">${printEsc(f.label)}</div>` +
+            `<div class="v ${f.tone || ""}">${printEsc(f.value)}</div></div>`
+        )
+        .join("") +
+      `</div>`
+    : "";
+
+  return `<!doctype html><html><head><meta charset="utf-8">
+<title>${printEsc(title)}</title>
+<style>
+  @page { margin: 14mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font: 11px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1a1f2b;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Masthead: the two things you need at a glance, then everything else. */
+  .head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 24px; padding-bottom: 14px; border-bottom: 2px solid #1a1f2b;
+  }
+  .head h1 { font-size: 21px; line-height: 1.2; letter-spacing: -0.2px; }
+  .sub { margin-top: 5px; font-size: 11px; color: #5b6474; }
+  .brand { font-size: 9px; font-weight: 700; letter-spacing: 2px;
+           text-transform: uppercase; color: #8a93a3; text-align: right;
+           white-space: nowrap; }
+
+  .aside { margin-top: 10px; text-align: right; white-space: nowrap; }
+  .aside .d { font-size: 17px; font-weight: 700; }
+  .aside .c { font-size: 10px; color: #5b6474; margin-top: 2px; }
+
+  /* Headline figures in a row under the masthead. */
+  .figures { display: flex; gap: 1px; background: #dfe3ea;
+             border: 1px solid #dfe3ea; margin: 14px 0 18px; }
+  .fig { flex: 1; background: #fff; padding: 9px 11px; }
+  .fig .k { font-size: 8px; font-weight: 700; letter-spacing: 1px;
+            text-transform: uppercase; color: #8a93a3; }
+  .fig .v { font-size: 14px; font-weight: 700; margin-top: 3px; }
+  .fig .v.good { color: #157f3d; }
+  .fig .v.bad { color: #b91c1c; }
+
+  /* Two columns of field blocks; wide blocks span both. */
+  .body { column-count: 2; column-gap: 22px; }
+  .body.single { column-count: 1; }
+  section { break-inside: avoid; margin-bottom: 15px; }
+  section.wide { column-span: all; }
+  h2 { font-size: 9px; font-weight: 700; letter-spacing: 1.2px;
+       text-transform: uppercase; color: #8a93a3;
+       padding-bottom: 4px; margin-bottom: 7px; border-bottom: 1px solid #e4e7ee; }
+
+  dl { display: grid; gap: 5px 0; }
+  .f { display: grid; grid-template-columns: 92px 1fr; gap: 10px;
+       align-items: baseline; }
+  dt { font-size: 9.5px; color: #78818f; }
+  dd { font-size: 10.5px; font-weight: 500; overflow-wrap: anywhere; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 8px; font-weight: 700; letter-spacing: 0.8px;
+       text-transform: uppercase; color: #8a93a3; text-align: left;
+       padding: 5px 7px; border-bottom: 1px solid #cfd5e0; }
+  td { font-size: 10px; padding: 5px 7px; border-bottom: 1px solid #eef0f5; }
+  tbody tr:nth-child(even) td { background: #fafbfd; }
+  .n { text-align: right; font-variant-numeric: tabular-nums; }
+  .good { color: #157f3d; }
+  .bad { color: #b91c1c; }
+
+  /* A win rate drawn as a bar behind the number reads faster than a column
+     of percentages. */
+  .rate { position: relative; }
+  /* Anchored right so the bar grows back from the figure it belongs to —
+     the column is right-aligned, and a bar starting at the far left reads
+     as unrelated to the number. */
+  .rate i { position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+            height: 15px; background: #e6eefb; border-radius: 2px; z-index: 0; }
+  .rate span { position: relative; z-index: 1; padding: 0 3px; }
+
+  .notes { white-space: pre-wrap; font-size: 10px; line-height: 1.55; }
+
+  footer { margin-top: 16px; padding-top: 8px; border-top: 1px solid #e4e7ee;
+           font-size: 8.5px; color: #98a0ae; display: flex;
+           justify-content: space-between; }
+</style></head><body>
+
+<div class="head">
+  <div>
+    <h1>${printEsc(heading)}</h1>
+    ${sub ? `<div class="sub">${printEsc(sub)}</div>` : ""}
+  </div>
+  <div>
+    <div class="brand">battag.bid</div>
+    ${aside || ""}
+  </div>
+</div>
+
+${fig}
+${body}
+
+<footer>
+  <span>${printEsc(footer || heading)}</span>
+  <span>Printed ${printEsc(new Date().toLocaleString())}</span>
+</footer>
+</body></html>`;
+}
+
+// Open a generated document in its own window and send it to the printer.
+function openPrintWindow(html) {
+  const w = window.open("", "_blank");
+  if (!w) {
+    toastError("Your browser blocked the print window — allow pop-ups for this site.");
+    return;
+  }
+  w.document.write(html);
+  w.document.close();
+  // Wait for layout before printing, or the dialog can open on a blank page.
+  w.addEventListener("load", () => {
+    w.focus();
+    w.print();
+  });
+}
+
 function printBid(o) {
   const quotes = quotesCache
     .filter((q) => String(q.opportunity_id) === String(o.id))
@@ -1915,7 +2047,7 @@ function printBid(o) {
     `<div class="f"><dt>${printEsc(label)}</dt><dd>${printEsc(value)}</dd></div>`;
 
   const block = (title, rows) => {
-    const filled = rows.filter(([, v]) => v && v !== "—");
+    const filled = rows.filter(([, v]) => v && v !== "\u2014");
     if (!filled.length) return "";
     return (
       `<section><h2>${printEsc(title)}</h2><dl>` +
@@ -1941,105 +2073,17 @@ function printBid(o) {
       quotes
         .map(
           (q) =>
-            `<tr><td>${printEsc(q.company || "—")}</td>` +
+            `<tr><td>${printEsc(q.company || "\u2014")}</td>` +
             `<td>${q.type === "budgetary" ? "Budgetary" : "Proposal"}</td>` +
-            `<td class="n">${printEsc(q.price == null ? "—" : currency.format(q.price))}</td>` +
-            `<td>${printEsc(q.price_sent_on ? formatDate(q.price_sent_on) : "—")}</td>` +
-            `<td>${printEsc(q.status || "—")}</td></tr>`
+            `<td class="n">${printEsc(q.price == null ? "\u2014" : currency.format(q.price))}</td>` +
+            `<td>${printEsc(q.price_sent_on ? formatDate(q.price_sent_on) : "\u2014")}</td>` +
+            `<td>${printEsc(q.status || "\u2014")}</td></tr>`
         )
         .join("") +
       `</tbody></table></section>`
     : "";
 
-  const doc = `<!doctype html><html><head><meta charset="utf-8">
-<title>${printEsc(o.name || "Bid")}</title>
-<style>
-  @page { margin: 14mm; }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font: 11px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color: #1a1f2b;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  /* Masthead: the two things you need at a glance, then everything else. */
-  .head {
-    display: flex; justify-content: space-between; align-items: flex-start;
-    gap: 24px; padding-bottom: 14px; border-bottom: 2px solid #1a1f2b;
-  }
-  .head h1 { font-size: 21px; line-height: 1.2; letter-spacing: -0.2px; }
-  .sub { margin-top: 5px; font-size: 11px; color: #5b6474; }
-  .brand { font-size: 9px; font-weight: 700; letter-spacing: 2px;
-           text-transform: uppercase; color: #8a93a3; text-align: right;
-           white-space: nowrap; }
-
-  .due { margin-top: 10px; text-align: right; white-space: nowrap; }
-  .due .d { font-size: 17px; font-weight: 700; }
-  .due .c { font-size: 10px; color: #5b6474; margin-top: 2px; }
-
-  /* Headline figures in a row under the masthead. */
-  .figures { display: flex; gap: 1px; background: #dfe3ea;
-             border: 1px solid #dfe3ea; margin: 14px 0 18px; }
-  .fig { flex: 1; background: #fff; padding: 9px 11px; }
-  .fig .k { font-size: 8px; font-weight: 700; letter-spacing: 1px;
-            text-transform: uppercase; color: #8a93a3; }
-  .fig .v { font-size: 14px; font-weight: 700; margin-top: 3px; }
-
-  /* Two columns of field blocks; wide blocks span both. */
-  .body { column-count: 2; column-gap: 22px; }
-  section { break-inside: avoid; margin-bottom: 15px; }
-  section.wide { column-span: all; }
-  h2 { font-size: 9px; font-weight: 700; letter-spacing: 1.2px;
-       text-transform: uppercase; color: #8a93a3;
-       padding-bottom: 4px; margin-bottom: 7px; border-bottom: 1px solid #e4e7ee; }
-
-  dl { display: grid; gap: 5px 0; }
-  .f { display: grid; grid-template-columns: 92px 1fr; gap: 10px;
-       align-items: baseline; }
-  dt { font-size: 9.5px; color: #78818f; }
-  dd { font-size: 10.5px; font-weight: 500; overflow-wrap: anywhere; }
-
-  table { width: 100%; border-collapse: collapse; }
-  th { font-size: 8px; font-weight: 700; letter-spacing: 0.8px;
-       text-transform: uppercase; color: #8a93a3; text-align: left;
-       padding: 5px 7px; border-bottom: 1px solid #cfd5e0; }
-  td { font-size: 10px; padding: 5px 7px; border-bottom: 1px solid #eef0f5; }
-  .n { text-align: right; font-variant-numeric: tabular-nums; }
-
-  .notes { white-space: pre-wrap; font-size: 10px; line-height: 1.55; }
-
-  footer { margin-top: 16px; padding-top: 8px; border-top: 1px solid #e4e7ee;
-           font-size: 8.5px; color: #98a0ae; display: flex;
-           justify-content: space-between; }
-</style></head><body>
-
-<div class="head">
-  <div>
-    <h1>${printEsc(o.name || "Opportunity")}</h1>
-    <div class="sub">${printEsc(
-      [o.internalBidNumber, o.division, o.status].filter(Boolean).join("  ·  ")
-    )}</div>
-  </div>
-  <div>
-    <div class="brand">battag.bid</div>
-    <div class="due">
-      <div class="d">${printEsc(formatDueDateTime(o.bidDueDate, o.bidDueTime))}</div>
-      ${countdown ? `<div class="c">${printEsc(countdown)}</div>` : ""}
-    </div>
-  </div>
-</div>
-
-<div class="figures">
-  <div class="fig"><div class="k">Project value</div>
-    <div class="v">${printEsc(currency.format(oppValue(o)))}</div></div>
-  <div class="fig"><div class="k">Lead estimator</div>
-    <div class="v">${printEsc(o.leadEstimator || "—")}</div></div>
-  <div class="fig"><div class="k">Owner / customer</div>
-    <div class="v">${printEsc(o.ownerCustomer || "—")}</div></div>
-</div>
-
-<div class="body">
+  const body = `<div class="body">
   ${block("Project team", [
     ["CM", fmtList(o.cm)],
     ["GC", fmtList(o.gc)],
@@ -2078,26 +2122,27 @@ function printBid(o) {
          <div class="notes">${printEsc(o.description)}</div></section>`
       : ""
   }
-</div>
+</div>`;
 
-<footer>
-  <span>${printEsc(o.name || "")}</span>
-  <span>Printed ${printEsc(new Date().toLocaleString())}</span>
-</footer>
-</body></html>`;
-
-  const w = window.open("", "_blank");
-  if (!w) {
-    toastError("Your browser blocked the print window — allow pop-ups for this site.");
-    return;
-  }
-  w.document.write(doc);
-  w.document.close();
-  // Wait for layout before printing, or the dialog can open on a blank page.
-  w.addEventListener("load", () => {
-    w.focus();
-    w.print();
-  });
+  openPrintWindow(
+    printDocument({
+      title: o.name || "Bid",
+      heading: o.name || "Opportunity",
+      sub: [o.internalBidNumber, o.division, o.status].filter(Boolean).join("  \u00b7  "),
+      aside:
+        `<div class="aside"><div class="d">` +
+        `${printEsc(formatDueDateTime(o.bidDueDate, o.bidDueTime))}</div>` +
+        (countdown ? `<div class="c">${printEsc(countdown)}</div>` : "") +
+        `</div>`,
+      figures: [
+        { label: "Project value", value: currency.format(oppValue(o)) },
+        { label: "Lead estimator", value: o.leadEstimator || "\u2014" },
+        { label: "Owner / customer", value: o.ownerCustomer || "\u2014" },
+      ],
+      body,
+      footer: o.name || "",
+    })
+  );
 }
 
 // ---------- Track record ----------

@@ -201,11 +201,124 @@ const COMPANY_INDUSTRIES = [
     select.value = options.includes(value) ? value : "";
   }
 
+  // ---------- Track record with this company ----------
+  // The same win/loss picture the Reports tab can produce, but on the company
+  // itself — which is where you are when the question comes up.
+
+  function renderCompanyRecord(name) {
+    const mount = $("company-record");
+    if (!mount) return;
+    mount.innerHTML = "";
+
+    const key = companyKey(name);
+    // Bids this company was priced on, found through their quotes.
+    const oppIds = new Set(
+      quotesCache
+        .filter((q) => companyKey(canonicalCompany(q.company)) === key)
+        .map((q) => String(q.opportunity_id))
+    );
+    const bids = loadOpps().filter((o) => oppIds.has(String(o.id)));
+    if (!bids.length) return;
+
+    const won = bids.filter((o) => o.status === "Won");
+    const lost = bids.filter((o) => o.status === "Lost");
+    const decided = won.length + lost.length;
+    const value = (list) =>
+      list.reduce(
+        (s, o) => s + (Number(o.finalPrice) || Number(o.budgetedProjectValue) || 0),
+        0
+      );
+    const rate = decided ? Math.round((won.length / decided) * 100) : null;
+
+    const sec = document.createElement("section");
+    sec.className = "company-record";
+
+    const head = document.createElement("div");
+    head.className = "company-record-head";
+    head.innerHTML =
+      `<h3>Track record</h3>` +
+      (rate === null
+        ? `<span class="crec-rate none">No decided bids yet</span>`
+        : `<span class="crec-rate ${rate >= 50 ? "good" : rate >= 25 ? "mid" : "poor"}">` +
+          `${rate}% win rate</span>`);
+    sec.appendChild(head);
+
+    // Counts and money are split into two rows: five equal cells would clip
+    // the currency figures at the modal's width.
+    const addStats = (cls, cells) => {
+      const grid = document.createElement("div");
+      grid.className = `crec-stats ${cls}`;
+      for (const [label, val, tone] of cells) {
+        const cell = document.createElement("div");
+        cell.className = "crec-stat";
+        cell.innerHTML = `<div class="k"></div><div class="v ${tone}"></div>`;
+        cell.querySelector(".k").textContent = label;
+        cell.querySelector(".v").textContent = val;
+        grid.appendChild(cell);
+      }
+      sec.appendChild(grid);
+    };
+
+    addStats("counts", [
+      ["Bids", bids.length, ""],
+      ["Won", won.length, "good"],
+      ["Lost", lost.length, "bad"],
+    ]);
+    addStats("values", [
+      ["Value won", currency.format(value(won)), "good"],
+      ["Value lost", currency.format(value(lost)), "bad"],
+    ]);
+
+    if (decided) {
+      const bar = document.createElement("div");
+      bar.className = "crec-bar";
+      bar.innerHTML =
+        `<span class="w" style="width:${(won.length / decided) * 100}%"></span>` +
+        `<span class="l" style="width:${(lost.length / decided) * 100}%"></span>`;
+      bar.title = `${won.length} won, ${lost.length} lost`;
+      sec.appendChild(bar);
+    }
+
+    // The most recent bids, so the numbers have something behind them.
+    const recent = [...bids]
+      .sort((a, b) => String(b.bidDueDate || "").localeCompare(String(a.bidDueDate || "")))
+      .slice(0, 6);
+
+    const list = document.createElement("div");
+    list.className = "crec-bids";
+    for (const o of recent) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "crec-bid";
+      const pill = `<span class="status ${statusClass(o.status)}">${o.status || "—"}</span>`;
+      item.innerHTML =
+        `<span class="crec-bid-name"></span>${pill}` +
+        `<span class="crec-bid-date">${o.bidDueDate ? formatDate(o.bidDueDate) : "—"}</span>`;
+      item.querySelector(".crec-bid-name").textContent = o.name || "Untitled";
+      item.title = o.name || "";
+      item.addEventListener("click", () => {
+        closeCompany();
+        openDetail(o);
+      });
+      list.appendChild(item);
+    }
+    if (bids.length > recent.length) {
+      const more = document.createElement("div");
+      more.className = "crec-more";
+      more.textContent = `+ ${bids.length - recent.length} more`;
+      list.appendChild(more);
+    }
+    sec.appendChild(list);
+
+    mount.appendChild(sec);
+  }
+
   function openCompany(name) {
     const row = saved.get(companyKey(name)) || {};
     editingName = name;
 
     $("company-title").textContent = name;
+    renderCompanyRecord(name);
     fillOptions($("c-type"), COMPANY_TYPES, row.type);
     fillOptions($("c-industry"), COMPANY_INDUSTRIES, row.industry);
     $("c-phone").value = row.phone || "";

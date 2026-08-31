@@ -172,8 +172,98 @@
     $("rep-rate-value").textContent = pct(wonValue, wonValue + lostValue);
     $("rep-nobid").textContent = hits.filter(isNoBid).length;
 
+    // Kept so Print can describe the same numbers without recomputing them.
+    lastReport = { hits, won, lost, decided, wonValue, lostValue };
+
     renderBreakdown(hits);
     renderMatches(hits);
+  }
+
+  let lastReport = null;
+  let lastRows = []; // the breakdown as rendered, in its current sort order
+
+  // ---------- Print ----------
+
+  function printReport() {
+    if (!lastReport) return;
+    const { hits, won, lost, decided, wonValue, lostValue } = lastReport;
+    const dim = DIMS.find((d) => d.key === groupBy) || DIMS[0];
+
+    // Which variables are filtered, so the printout says what it covers —
+    // a report without its filters written down is unreadable a week later.
+    const applied = DIMS.map((d) => [d.label, (selections[d.key] || [])])
+      .filter(([, vals]) => vals.length)
+      .map(([label, vals]) => `${label}: ${vals.join(", ")}`);
+
+    const from = $("rep-from").value;
+    const to = $("rep-to").value;
+    const range =
+      from || to
+        ? `Bid due ${from ? formatDate(from) : "any"} to ${to ? formatDate(to) : "any"}`
+        : "All bid due dates";
+
+    const scope = applied.length
+      ? `<section class="wide"><h2>Filters applied</h2><dl>` +
+        applied
+          .map(
+            (line) =>
+              `<div class="f"><dt>${escHtml(line.split(":")[0])}</dt>` +
+              `<dd>${escHtml(line.split(": ").slice(1).join(": "))}</dd></div>`
+          )
+          .join("") +
+        `</dl></section>`
+      : "";
+
+    const rows = lastRows;
+    const table = rows.length
+      ? `<section class="wide"><h2>Breakdown by ${escHtml(dim.label)}</h2><table>
+          <thead><tr><th>${escHtml(dim.label)}</th><th class="n">Bids</th>
+          <th class="n">Won</th><th class="n">Lost</th><th class="n">Win rate</th>
+          <th class="n">Value won</th><th class="n">Value lost</th></tr></thead><tbody>` +
+        rows
+          .map((g) => {
+            const rate = g.bids ? Math.round((g.won / g.bids) * 100) : 0;
+            return (
+              `<tr><td>${escHtml(g.name)}</td>` +
+              `<td class="n">${g.bids}</td>` +
+              `<td class="n good">${g.won}</td>` +
+              `<td class="n bad">${g.lost}</td>` +
+              `<td class="n rate"><i style="width:${rate}%"></i>` +
+              `<span>${pct(g.won, g.bids)}</span></td>` +
+              `<td class="n">${escHtml(currency.format(g.wonValue))}</td>` +
+              `<td class="n">${escHtml(currency.format(g.lostValue))}</td></tr>`
+            );
+          })
+          .join("") +
+        `</tbody></table></section>`
+      : `<section class="wide"><h2>Breakdown</h2>
+         <div class="notes">No decided bids match these filters.</div></section>`;
+
+    openPrintWindow(
+      printDocument({
+        title: `Win-loss by ${dim.label}`,
+        heading: `Win / loss by ${dim.label}`,
+        sub: range,
+        aside:
+          `<div class="aside"><div class="d">${escHtml(pct(won.length, decided))}</div>` +
+          `<div class="c">win rate · ${decided} decided</div></div>`,
+        figures: [
+          { label: "Decided bids", value: String(decided) },
+          { label: "Won", value: String(won.length), tone: "good" },
+          { label: "Lost", value: String(lost.length), tone: "bad" },
+          { label: "Value won", value: currency.format(wonValue), tone: "good" },
+          { label: "Value lost", value: currency.format(lostValue), tone: "bad" },
+          { label: "No bid / cancelled", value: String(hits.filter(isNoBid).length) },
+        ],
+        body: `<div class="body single">${scope}${table}</div>`,
+        footer: `Win / loss by ${dim.label}`,
+      })
+    );
+  }
+
+  // Group names come from bid data, so they can't go straight into markup.
+  function escHtml(v) {
+    return String(v ?? "").replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
   }
 
   // ---------- Breakdown sorting ----------
@@ -259,6 +349,7 @@
     }
 
     const rows = sortGroups([...groups.values()]);
+    lastRows = rows; // Print uses the same rows in the same order
 
     const tbody = $("rep-breakdown");
     tbody.innerHTML = "";
@@ -420,6 +511,7 @@
   $("rep-from").addEventListener("change", runReport);
   $("rep-to").addEventListener("change", runReport);
   $("rep-reset").addEventListener("click", resetFilters);
+  $("rep-print").addEventListener("click", printReport);
 
   for (const th of document.querySelectorAll(".rep-table thead th[data-sort]")) {
     th.tabIndex = 0;

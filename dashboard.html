@@ -189,6 +189,7 @@
           <div class="table-head">
             <h2>Win / Loss report</h2>
             <span class="rep-hint">Pick any combination of variables — bids must match all of them.</span>
+            <button type="button" id="rep-print" class="btn-ghost sm">Print</button>
             <button type="button" id="rep-reset" class="btn-ghost sm">Reset</button>
           </div>
           <div class="rep-filters" id="rep-filters"></div>
@@ -785,6 +786,8 @@
           <button class="modal-close" id="company-close" title="Close">✕</button>
         </div>
         <div class="company-form">
+          <!-- Win/loss with this company, filled by companies.js -->
+          <div id="company-record"></div>
           <div class="section-grid">
             <div class="field">
               <label for="c-type">Type</label>
