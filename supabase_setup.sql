@@ -38,8 +38,7 @@ create table if not exists public.opportunities (
   lead_estimator          text,
 
   owner_customer          text,
-  cm                      text[] default '{}',
-  gc                      text[] default '{}',
+  cm                      text[] default '{}',   -- CM / GC (one field)
   architect               text,
   engineer                text,
   local_unions            text[] default '{}',

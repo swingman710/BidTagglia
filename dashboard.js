@@ -204,7 +204,6 @@ const COLUMN_MAP = {
   leadEstimator: "lead_estimator",
   ownerCustomer: "owner_customer",
   cm: "cm",
-  gc: "gc",
   architect: "architect",
   engineer: "engineer",
   localUnions: "local_unions",
@@ -1654,7 +1653,6 @@ function buildForm(opp) {
 
   // Multi-select free-entry comboboxes (chips + add new)
   buildMultiEntry(document.getElementById("mc-cm"), distinctPrev("cm"), opp && opp.cm);
-  buildMultiEntry(document.getElementById("mc-gc"), distinctPrev("gc"), opp && opp.gc);
 
   // Custom time picker (hours | quarter-hour minutes)
   buildTimeCombo(document.getElementById("tc-due-time"));
@@ -1798,8 +1796,7 @@ function detailSections(o) {
     ]],
     ["Project Team", [
       ["Owner / customer", fmtText(o.ownerCustomer)],
-      ["CM", fmtList(o.cm)],
-      ["GC", fmtList(o.gc)],
+      ["CM / GC", fmtList(o.cm)],
       ["Architect", fmtText(o.architect)],
       ["Engineer", fmtText(o.engineer)],
       ["Local unions", fmtList(o.localUnions)],
@@ -2122,8 +2119,7 @@ function printBid(o) {
 
   const body = `<div class="body">
   ${block("Project team", [
-    ["CM", fmtList(o.cm)],
-    ["GC", fmtList(o.gc)],
+    ["CM / GC", fmtList(o.cm)],
     ["Architect", o.architect],
     ["Engineer", o.engineer],
     ["Project manager", o.projectManager],
@@ -2872,7 +2868,6 @@ function readForm() {
 
     ownerCustomer: val("f-owner"),
     cm: document.getElementById("mc-cm")._getSelected(),
-    gc: document.getElementById("mc-gc")._getSelected(),
     architect: val("f-architect"),
     engineer: val("f-engineer"),
     localUnions: document.getElementById("mc-local-unions")._getSelected(),

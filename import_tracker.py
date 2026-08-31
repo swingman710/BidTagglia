@@ -28,7 +28,8 @@ Mapping decisions, all confirmed:
   Bid To:     becomes the company on a proposal quote and nothing else. It
               reads like the owner but is the GC/CM that was priced, and
               differs from Owner/Customer on most bids. Several companies are
-              separated by ';' or ',' and each gets its own quote.
+              separated by ';' — never by ',', which appears inside names
+              like "E.P. Guidi, Inc." — and each gets its own quote.
 
   prices      Only ~111 of 6,537 bids have an amount in the price export. The
               rest get a quote carrying the company with no amount, so the
@@ -129,8 +130,11 @@ def unions(raw):
     return re.findall(r"\d+[\w-]*", raw.replace("Local", " "))
 
 
-def split_list(raw, seps=";,"):
-    return [c.strip() for c in re.split(f"[{seps}]", raw or "") if c.strip()]
+def split_list(raw):
+    """Only ';' separates companies. Commas belong to the names themselves —
+    "E.P. Guidi, Inc.", "Rectenwald Brothers Construction, Inc." — and
+    splitting on them turns one company into two."""
+    return [c.strip() for c in (raw or "").split(";") if c.strip()]
 
 
 def description(row):
@@ -215,8 +219,9 @@ def build_opportunities():
             "market_segment": txt(r.get("Market Segment")),
             "bid_type": txt(r.get("Bid Type")),
             "delivery_method": txt(r.get("Delivery Method")),
+            # "Related GC/CM" is a Record ID pointing at the company already
+            # named in CM — a duplicate reference, not a second company.
             "cm": split_list(r.get("CM")),
-            "gc": split_list(r.get("Related GC/CM")),
             "architect": txt(r.get("Architect")),
             "engineer": txt(r.get("Engineer")),
             "local_unions": unions(r.get("Union")) or unions(r.get("Local Union(s)")),
@@ -275,43 +280,31 @@ def import_opportunities(dry):
         print(json.dumps(rows[0], indent=2)[:800])
         return
 
-    existing = {r["legacy_id"]: r["id"]
-                for r in page_all("/rest/v1/opportunities?select=id,legacy_id"
-                                  "&legacy_id=not.is.null")}
-    new = [r for r in rows if r["legacy_id"] not in existing]
-    upd = [r for r in rows if r["legacy_id"] in existing]
-
-    print(f"\n{len(new)} new, {len(upd)} already imported (will be refreshed)")
-    send("opportunities", new, "inserting")
-
-    # PostgREST can't infer the partial unique index for an upsert, so updates
-    # go one legacy_id at a time. Slower, but it is the only correct route.
-    if upd:
-        print(f"  refreshing {len(upd)} existing rows...")
-        for i, row in enumerate(upd, 1):
-            body = {k: v for k, v in row.items() if k != "legacy_id"}
-            call("PATCH",
-                 f"/rest/v1/opportunities?legacy_id=eq.{urllib.parse.quote(row['legacy_id'])}",
-                 body, prefer="return=minimal")
-            if i % 250 == 0 or i == len(upd):
-                print(f"    {i}/{len(upd)}")
-
-    # Rebuild quotes from scratch: they carry no edits worth preserving, and
-    # matching them one by one against the export is far more fragile.
-    ids = {r["legacy_id"]: r["id"]
-           for r in page_all("/rest/v1/opportunities?select=id,legacy_id"
-                             "&legacy_id=not.is.null")}
-    print(f"  {len(ids)} bids carry a legacy id")
-
-    print("  clearing imported quotes...")
-    for legacy_ids in chunk(list(ids.values()), 100):
-        joined = ",".join(f'"{i}"' for i in legacy_ids)
+    # Replace rather than update: refreshing 6,500 rows one PATCH at a time is
+    # thousands of round trips, where a delete plus a bulk insert is a few
+    # dozen. Only rows carrying a legacy_id are touched, so bids created in the
+    # app are left alone.
+    print("  clearing previously imported quotes and bids...")
+    ids = [r["id"] for r in page_all("/rest/v1/opportunities?select=id"
+                                     "&legacy_id=not.is.null")]
+    print(f"    {len(ids)} imported bids to replace")
+    for group in chunk(ids, 100):
+        joined = ",".join(f'"{i}"' for i in group)
         call("DELETE", f"/rest/v1/pricing_quotes?opportunity_id=in.({joined})",
              prefer="return=minimal")
+    call("DELETE", "/rest/v1/opportunities?legacy_id=not.is.null",
+         prefer="return=minimal")
+
+    send("opportunities", rows, "inserting bids")
+
+    lookup = {r["legacy_id"]: r["id"]
+              for r in page_all("/rest/v1/opportunities?select=id,legacy_id"
+                                "&legacy_id=not.is.null")}
+    print(f"  {len(lookup)} bids carry a legacy id")
 
     out = []
     for q in quotes:
-        oid = ids.get(q["legacy_id"])
+        oid = lookup.get(q["legacy_id"])
         if not oid:
             continue
         out.append({k: v for k, v in q.items() if k != "legacy_id"}
