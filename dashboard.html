@@ -103,7 +103,7 @@
         <div class="controls">
           <div class="search">
             <span class="ic">⌕</span>
-            <input id="search" type="text" placeholder="Search opportunity, division, estimator or owner" />
+            <input id="search" type="text" placeholder="Search any field — name, project #, city, notes…" />
           </div>
           <div class="controls-right">
             <button id="new-opp" class="btn-primary inline">+ New Opportunity</button>
@@ -166,6 +166,7 @@
               <thead>
                 <tr>
                   <th data-sort="name">Opportunity</th>
+                  <th class="col-num" data-sort="bidNumber">Project #</th>
                   <th data-sort="division">Division</th>
                   <th data-sort="bidDue">Bid Due</th>
                   <th data-sort="days">Days Until Due</th>
@@ -303,12 +304,15 @@
        <!-- ================= Companies view ================= -->
        <div class="view" id="view-companies" hidden>
         <section class="panel">
-          <div class="table-head">
+          <div class="table-head company-table-head">
             <h2>Companies</h2>
             <span id="company-count" class="count-pill">0</span>
-            <span class="rep-hint">
-              Every company priced on a bid. Click one to fill in its details.
-            </span>
+            <div class="search inline-search">
+              <span class="ic">⌕</span>
+              <input id="company-search" type="text"
+                     placeholder="Search name, type, industry or phone" />
+            </div>
+            <button id="new-company" class="btn-primary inline">+ New Company</button>
           </div>
           <div class="table-wrap">
             <table class="bids company-table">
@@ -790,8 +794,10 @@
           <div id="company-record"></div>
           <div class="section-grid">
             <div class="field">
-              <label for="c-type">Type</label>
-              <select id="c-type"></select>
+              <label>Type</label>
+              <!-- Multi-select: a company is often more than one thing, e.g.
+                   Construction Manager and Electrician. -->
+              <div class="multicombo" id="mc-c-type"></div>
             </div>
             <div class="field">
               <label for="c-industry">Industry</label>

@@ -1730,9 +1730,11 @@ table.bids td:first-child {
   font-weight: 600;
 }
 
-/* highlighted (value) column — Finviz's purple-tinted sorted column */
-table.bids th:nth-child(5),
-table.bids td:nth-child(5) {
+/* highlighted (value) column — Finviz's purple-tinted sorted column.
+   Matched by class, not position: a column added to its left used to shift
+   the tint onto the wrong one. */
+table.bids th.col-value,
+table.bids td.col-value {
   background: var(--col-accent);
   border-left: 1px solid var(--col-accent-bd);
   border-right: 1px solid var(--col-accent-bd);
@@ -1791,32 +1793,42 @@ table.bids.opp-table {
 }
 
 table.bids.opp-table th:nth-child(2),
-table.bids.opp-table td:nth-child(2) {   /* Division */
-  width: 8%;
+table.bids.opp-table td:nth-child(2) {   /* Project # */
+  width: 9%;
 }
 
 table.bids.opp-table th:nth-child(3),
-table.bids.opp-table td:nth-child(3) {   /* Bid Due */
-  width: 13%;
+table.bids.opp-table td:nth-child(3) {   /* Division */
+  width: 8%;
 }
 
 table.bids.opp-table th:nth-child(4),
-table.bids.opp-table td:nth-child(4) {   /* Days Until Due */
-  width: 11%;
+table.bids.opp-table td:nth-child(4) {   /* Bid Due */
+  width: 12%;
 }
 
 table.bids.opp-table th:nth-child(5),
-table.bids.opp-table td:nth-child(5) {   /* Project Value */
-  width: 13%;
+table.bids.opp-table td:nth-child(5) {   /* Days Until Due */
+  width: 10%;
 }
 
-/* These two override the 190px above — a percentage keeps them in proportion
-   as the window changes instead of stealing room from the name. */
+table.bids.opp-table th.col-value,
+table.bids.opp-table td.col-value {      /* Project Value */
+  width: 12%;
+}
+
+/* These override the shared 190px — a percentage keeps them in proportion as
+   the window changes instead of stealing room from the name. */
 table.bids.opp-table th.col-pm,
 table.bids.opp-table td.col-pm,
 table.bids.opp-table th.col-status,
 table.bids.opp-table td.col-status {
-  width: 15%;
+  width: 14%;
+}
+
+table.bids.opp-table td.col-num {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
 }
 
 /* Anything that would overflow its column is cut with an ellipsis rather than
@@ -3415,4 +3427,25 @@ table.bids tbody tr.bid-row {
 
 .company-table td a:hover {
   text-decoration: underline;
+}
+
+/* A search box inside a panel heading rather than the controls band. */
+.search.inline-search {
+  flex: 0 1 260px;
+  margin-left: 6px;
+}
+
+.search.inline-search input {
+  padding: 6px 10px 6px 30px;
+  font-size: 13px;
+}
+
+.search.inline-search .ic {
+  left: 9px;
+  font-size: 13px;
+}
+
+/* The Companies heading pushes its button to the right end. */
+.company-table-head .btn-primary.inline {
+  margin-left: auto;
 }

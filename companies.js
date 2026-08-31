@@ -26,6 +26,7 @@ const COMPANY_INDUSTRIES = [
 
   let saved = new Map(); // company key -> row in public.companies
   let editingName = null;
+  let query = "";
 
   // ---------- Data ----------
 
@@ -53,6 +54,17 @@ const COMPANY_INDUSTRIES = [
       return false;
     }
     return true;
+  }
+
+  // Type became multi-value. Rows written before that hold a plain string, so
+  // read both shapes rather than needing a data migration.
+  function typeList(row) {
+    const v = row && row.type;
+    if (Array.isArray(v)) return v.filter(Boolean);
+    if (typeof v === "string" && v.trim()) {
+      return v.split(";").map((x) => x.trim()).filter(Boolean);
+    }
+    return [];
   }
 
   // How many bids we've priced to each company.
@@ -124,21 +136,32 @@ const COMPANY_INDUSTRIES = [
       return {
         name,
         key,
-        type: row.type || "",
+        type: typeList(row).join(", "),
         industry: row.industry || "",
         phone: row.phone || "",
         website: row.website || "",
         bids: (counts.get(key) || new Set()).size,
       };
     });
-    sortRows(rows);
+    const shown = query
+      ? rows.filter((r) =>
+          [r.name, r.type, r.industry, r.phone, r.website]
+            .join(" ")
+            .toLowerCase()
+            .includes(query)
+        )
+      : rows;
+    sortRows(shown);
     markHeader();
 
-    $("company-count").textContent = rows.length;
-    $("company-empty").style.display = rows.length ? "none" : "block";
+    $("company-count").textContent = shown.length;
+    $("company-empty").style.display = shown.length ? "none" : "block";
+    $("company-empty").textContent = query
+      ? "No companies match your search."
+      : "No companies yet — add one above.";
     tbody.innerHTML = "";
 
-    for (const entry of rows) {
+    for (const entry of shown) {
       const { name, key } = entry;
       const row = saved.get(key) || {};
       const tr = document.createElement("tr");
@@ -159,7 +182,7 @@ const COMPANY_INDUSTRIES = [
 
       const cells = [
         [name, ""],
-        [row.type || "—", ""],
+        [entry.type || "—", ""],
         [row.industry || "—", ""],
         [row.phone || "—", ""],
       ];
@@ -319,14 +342,21 @@ const COMPANY_INDUSTRIES = [
 
     $("company-title").textContent = name;
     renderCompanyRecord(name);
-    fillOptions($("c-type"), COMPANY_TYPES, row.type);
+    // Every type seen in the data, so an imported value that isn't on the
+    // standard list is still selectable rather than silently dropped.
+    const allTypes = new Set(COMPANY_TYPES);
+    for (const r of saved.values()) for (const t of typeList(r)) allTypes.add(t);
+    buildMultiCombo(
+      $("mc-c-type"),
+      [...allTypes].sort((a, b) => a.localeCompare(b)),
+      typeList(row)
+    );
     fillOptions($("c-industry"), COMPANY_INDUSTRIES, row.industry);
     $("c-phone").value = row.phone || "";
     $("c-website").value = row.website || "";
     $("c-notes").value = row.notes || "";
 
     $("company-modal").hidden = false;
-    $("c-type").focus();
   }
 
   function closeCompany() {
@@ -338,7 +368,7 @@ const COMPANY_INDUSTRIES = [
     if (!editingName) return;
     const editing = editingName; // closeCompany() clears it before the toast
     const ok = await saveCompany(editingName, {
-      type: $("c-type").value || null,
+      type: $("mc-c-type")._getSelected(),
       industry: $("c-industry").value || null,
       phone: $("c-phone").value.trim() || null,
       website: $("c-website").value.trim() || null,
@@ -370,6 +400,33 @@ const COMPANY_INDUSTRIES = [
         e.preventDefault();
         setSort(th.dataset.sort);
       }
+    });
+  }
+
+  // Companies used to appear only by pricing a bid to one. Adding a prospect
+  // before you've bid to them is a reasonable thing to want.
+  $("new-company")?.addEventListener("click", () => {
+    const name = (prompt("Company name") || "").trim();
+    if (!name) return;
+    if (saved.has(companyKey(name)) || knownCompanies().some(
+      (n) => companyKey(n) === companyKey(name)
+    )) {
+      toastError(`${canonicalCompany(name)} is already listed.`);
+      return;
+    }
+    rememberCompany(name);
+    openCompany(canonicalCompany(name));
+  });
+
+  const cSearch = $("company-search");
+  if (cSearch) {
+    let timer = null;
+    cSearch.addEventListener("input", () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        query = cSearch.value.trim().toLowerCase();
+        renderCompanies();
+      }, 120);
     });
   }
 

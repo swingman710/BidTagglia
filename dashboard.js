@@ -280,6 +280,7 @@ async function fetchOpps() {
   });
   if (error) return oppsCache;
   oppsCache = rows.map(fromRow);
+  clearSearchCache();
   return oppsCache;
 }
 
@@ -316,7 +317,7 @@ function showLoadingRows(n = 12) {
   const tbody = document.getElementById("bid-rows");
   if (!tbody || tbody.childElementCount) return;
   document.getElementById("empty").style.display = "none";
-  const widths = [70, 40, 55, 35, 50, 60, 45];
+  const widths = [70, 45, 40, 55, 35, 50, 60, 45]; // one per column
   for (let i = 0; i < n; i++) {
     const tr = document.createElement("tr");
     tr.className = "skeleton-row";
@@ -507,6 +508,38 @@ function renderRowLimitNote(shown, total) {
   note.textContent =
     `Showing the first ${shown.toLocaleString()} of ${total.toLocaleString()} ` +
     "— sort or filter to bring what you need to the top.";
+}
+
+// ---------- Search ----------
+// Search covers every field on a bid, not just the ones the table shows —
+// a project number, a city, a union, a phrase from the notes all find it.
+//
+// The searchable text is built once per bid and cached, because rebuilding it
+// for thousands of bids on every keystroke is the difference between instant
+// and laggy.
+
+const searchCache = new Map(); // opportunity id -> lower-cased text of every field
+
+function searchBlob(o) {
+  const key = String(o.id);
+  const hit = searchCache.get(key);
+  if (hit !== undefined) return hit;
+
+  const parts = [];
+  for (const value of Object.values(o)) {
+    if (value == null) continue;
+    if (Array.isArray(value)) parts.push(value.join(" "));
+    else if (typeof value !== "object") parts.push(String(value));
+  }
+  const blob = parts.join("  ").toLowerCase();
+  searchCache.set(key, blob);
+  return blob;
+}
+
+// Anything that reloads or edits bids has to drop the cache, or search keeps
+// matching on what a bid used to say.
+function clearSearchCache() {
+  searchCache.clear();
 }
 
 // ---------- Estimator workload ----------
@@ -796,6 +829,7 @@ function updateStatusButton() {
 
 const SORT_KEYS = {
   name: (o) => (o.name || "").toLowerCase(),
+  bidNumber: (o) => (o.internalBidNumber || "").toLowerCase(),
   division: (o) => (o.division || "").toLowerCase(),
   bidDue: (o) => o.bidDueDate || "",
   days: (o) => daysUntil(o.bidDueDate),
@@ -870,9 +904,7 @@ function render() {
         return false;
       }
       if (!query) return true;
-      return [o.name, o.division, o.leadEstimator, o.ownerCustomer].some((f) =>
-        (f || "").toLowerCase().includes(query)
-      );
+      return searchBlob(o).includes(query);
     })
   );
 
@@ -908,6 +940,10 @@ function render() {
     nameTd.textContent = opp.name || "—";
     // The column truncates, so keep the full name reachable on hover.
     if (opp.name) nameTd.title = opp.name;
+
+    const numTd = document.createElement("td");
+    numTd.className = "col-num";
+    numTd.textContent = opp.internalBidNumber || "—";
 
     const divTd = document.createElement("td");
     divTd.textContent = opp.division || "—";
@@ -949,7 +985,7 @@ function render() {
       statusTd.textContent = "—";
     }
 
-    tr.append(nameTd, divTd, dueTd, daysTd, valueTd, pmTd, statusTd);
+    tr.append(nameTd, numTd, divTd, dueTd, daysTd, valueTd, pmTd, statusTd);
     tr.className = "bid-row";
     tr.addEventListener("click", () => openDetail(opp));
     rows.appendChild(tr);
@@ -1827,6 +1863,7 @@ async function setOppStatus(o, status) {
   // full reload.
   const cached = oppsCache.find((x) => String(x.id) === String(o.id));
   if (cached) cached.status = status;
+  clearSearchCache();
 
   renderDetail(o);
   render();
