@@ -1014,8 +1014,9 @@ function columnValues(col) {
 // filters that are on without anyone asking (hidden statuses, the year
 // window) — a quick filter or a funnel segment is an explicit "show me
 // these", and shouldn't come back empty because of a default.
-function passesColumnFilters(o, skipDefaults) {
+function passesColumnFilters(o, skipDefaults, except) {
   for (const col of FILTER_COLUMNS) {
+    if (col.key === except) continue;
     if (skipDefaults && (col.key === "status" || col.key === "bidDue")) continue;
     if (col.type === "text") {
       const q = textByColumn.get(col.key);
@@ -1240,6 +1241,112 @@ function updateFilterButton() {
   btn.classList.toggle("has-hidden", n > 0);
 }
 
+// ---------- Division pills ----------
+// Division is the filter reached for most often, so it sits above the table
+// as a row of buttons as well as inside the filter menu. Both read the same
+// hidden set, so picking one place shows up in the other. The calendar draws
+// the same row over its bid due dates, but keeps its own selection — the two
+// views are looked at for different reasons.
+
+// Configured divisions in their listed order, anything else after them, and
+// bids with no division at the end.
+function divisionOrder(values) {
+  const rank = new Map(FIELD_LISTS.division.map((d, i) => [d, i]));
+  return [...values].sort((a, b) => {
+    if (a === "Unspecified" || b === "Unspecified") {
+      return (a === "Unspecified") - (b === "Unspecified");
+    }
+    const ra = rank.has(a) ? rank.get(a) : 99;
+    const rb = rank.has(b) ? rank.get(b) : 99;
+    return ra - rb || a.localeCompare(b);
+  });
+}
+
+// Clicking a division while nothing is picked means "just this one". After
+// that a click adds or drops one, and dropping the last shows them all again.
+// An empty set means no filter at all, not "show nothing".
+function pickDivision(selected, all, division) {
+  if (division === null) return new Set();
+  const next = new Set(selected);
+  if (!selected.size) next.add(division);
+  else if (next.has(division)) next.delete(division);
+  else next.add(division);
+  if (next.size === all.length) next.clear();
+  return next;
+}
+
+function renderDivisionPills(host, { label, all, counts, selected, onPick }) {
+  host.innerHTML = "";
+  host.hidden = all.length < 2; // nothing to choose between
+
+  const tag = document.createElement("span");
+  tag.className = "filter-bar-label";
+  tag.textContent = label;
+  host.appendChild(tag);
+
+  const pill = (text, on, n, onClick) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip plain";
+    b.classList.toggle("is-on", on);
+    b.setAttribute("aria-pressed", String(on));
+    const name = document.createElement("span");
+    name.textContent = text;
+    b.appendChild(name);
+    if (n !== null) {
+      // Counted against every other filter in play, so the number is what
+      // picking this pill would actually give you.
+      const num = document.createElement("span");
+      num.className = "chip-n";
+      num.textContent = n.toLocaleString();
+      b.appendChild(num);
+      if (n === 0 && !on) b.classList.add("is-empty");
+    }
+    b.addEventListener("click", onClick);
+    host.appendChild(b);
+  };
+
+  pill("All", selected.size === 0, null, () => onPick(null));
+  for (const d of all) pill(d, selected.has(d), counts.get(d) || 0, () => onPick(d));
+}
+
+// `pool` is every bid that passed the other filters — so the counts say what
+// each division would add, not how many exist in total.
+function renderDivisionBar(pool) {
+  const host = document.getElementById("division-bar");
+  if (!host) return;
+  const col = FILTER_BY_KEY.get("division");
+
+  const counts = new Map();
+  for (const o of pool) {
+    const d = col.value(o);
+    counts.set(d, (counts.get(d) || 0) + 1);
+  }
+  // Divisions that exist on a bid somewhere, even if this pool has none.
+  const seen = new Set(counts.keys());
+  for (const o of loadOpps()) seen.add(col.value(o));
+  const all = divisionOrder(seen);
+
+  const hidden = hiddenFor("division");
+  const selected = new Set(all.filter((d) => !hidden.has(d)));
+  if (selected.size === all.length) selected.clear();
+
+  renderDivisionPills(host, {
+    label: "Division",
+    all,
+    counts,
+    selected,
+    onPick: (division) => {
+      const next = pickDivision(selected, all, division);
+      hidden.clear();
+      if (next.size) for (const d of all) if (!next.has(d)) hidden.add(d);
+      touchColumn("division");
+      render();
+      updateFilterButton();
+    },
+  });
+}
+
 // ---------- Sorting ----------
 // Click a column heading to sort by it; click again to reverse. Each column
 // sorts by the value behind the cell rather than the text in it, so money
@@ -1306,28 +1413,32 @@ function render() {
 
   const chip = activeChip && QUICK_FILTERS[activeChip];
 
-  const visible = sortOpps(
-    opps.filter((o) => {
-      const status = o.status || "Unspecified";
-      // A quick filter is an explicit request for a named set of bids, so it
-      // replaces the status rules rather than being narrowed by them.
-      if (chip) {
-        if (!chip.match(o)) return false;
-      } else if (statusFilter.size) {
-        // Clicking a funnel segment is likewise an explicit "show me these",
-        // so it wins over the hide list — otherwise picking Lost from the
-        // funnel while Lost is hidden would return nothing and look broken.
-        if (!statusFilter.has(status)) return false;
-      }
-      // Both of those skip the two filters that are on by default (hidden
-      // statuses, the recent-year window); anything picked by hand in the
-      // filter menu still applies.
-      if (!passesColumnFilters(o, !!chip || statusFilter.size > 0)) return false;
-      if (!query) return true;
-      return searchBlob(o).includes(query);
-    })
-  );
+  // `except` leaves one column's filter out, so the division pills can count
+  // what picking each of them would give.
+  const matches = (o, except) => {
+    const status = o.status || "Unspecified";
+    // A quick filter is an explicit request for a named set of bids, so it
+    // replaces the status rules rather than being narrowed by them.
+    if (chip) {
+      if (!chip.match(o)) return false;
+    } else if (statusFilter.size) {
+      // Clicking a funnel segment is likewise an explicit "show me these",
+      // so it wins over the hide list — otherwise picking Lost from the
+      // funnel while Lost is hidden would return nothing and look broken.
+      if (!statusFilter.has(status)) return false;
+    }
+    // Both of those skip the two filters that are on by default (hidden
+    // statuses, the recent-year window); anything picked by hand in the
+    // filter menu still applies.
+    const skipDefaults = !!chip || statusFilter.size > 0;
+    if (!passesColumnFilters(o, skipDefaults, except)) return false;
+    if (!query) return true;
+    return searchBlob(o).includes(query);
+  };
+
+  const visible = sortOpps(opps.filter((o) => matches(o)));
   lastVisibleCount = visible.length;
+  renderDivisionBar(opps.filter((o) => matches(o, "division")));
 
   // The stat strip describes every bid that matched, not just the page of
   // them the table draws — otherwise the totals would change meaning the
@@ -1431,8 +1542,11 @@ function showView(view) {
     section.hidden = section.id !== `view-${view}`;
   }
   // These read across the whole history, not just the recent window the table
-  // starts with.
-  if (view === "reports" || view === "companies") loadHistoryNow();
+  // starts with — the calendar included, or paging back a year shows an empty
+  // month.
+  if (view === "reports" || view === "companies" || view === "calendar") {
+    loadHistoryNow();
+  }
   // Every hook loads data. None of them run for someone the invite list turned
   // away, even if they've forced the hidden page back into view — the tabs
   // then show nothing, because nothing was ever fetched.

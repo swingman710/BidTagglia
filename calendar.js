@@ -23,6 +23,15 @@
   let mode = "activities";
   let cursor = null; // { year, month } — the month on screen, 0-indexed month
 
+  // Filters over what the grid draws. Each mode keeps its own: activities are
+  // narrowed by type and by who they're against, bid due dates by division.
+  // Empty means no filter, not "show nothing". These are the calendar's own —
+  // the Opportunities table keeps a separate division choice, since the two
+  // views get looked at for different reasons.
+  let acType = "";
+  let acContact = "";
+  const bidDivisions = new Set();
+
   function todayKey() {
     const now = new Date();
     return dateKey(now.getFullYear(), now.getMonth(), now.getDate());
@@ -55,6 +64,8 @@
     const entries = [];
     for (const a of list) {
       if (!a.scheduled_date) continue;
+      if (acType && (a.type || "") !== acType) continue;
+      if (acContact && String(a.contact_id || "") !== acContact) continue;
       entries.push({
         key: String(a.scheduled_date).split("T")[0],
         label: a.title,
@@ -69,10 +80,13 @@
     return entries;
   }
 
+  const divisionOf = (o) => o.division || "Unspecified";
+
   function bidEntries() {
     const entries = [];
     for (const o of loadOpps()) {
       if (!o.bidDueDate) continue;
+      if (bidDivisions.size && !bidDivisions.has(divisionOf(o))) continue;
       entries.push({
         key: String(o.bidDueDate).split("T")[0],
         label: o.name || `Opportunity ${o.id}`,
@@ -130,11 +144,166 @@
     return cell;
   }
 
+  // ---------- Filter bar ----------
+  // Swapped out with the mode: activities filter by type and contact, bid due
+  // dates by division. Counts describe the month on screen, since that is
+  // what the grid is about to draw.
+
+  function inMonth(dateStr) {
+    if (!cursor || !dateStr) return false;
+    const [y, m] = String(dateStr).split("T")[0].split("-");
+    return Number(y) === cursor.year && Number(m) === cursor.month + 1;
+  }
+
+  function labelOnly(el, text) {
+    const tag = document.createElement("span");
+    tag.className = "filter-bar-label";
+    tag.textContent = text;
+    el.appendChild(tag);
+  }
+
+  // One <select> over a list of [value, label, count] rows.
+  function renderSelect(host, { label, anyLabel, options, value, onPick }) {
+    labelOnly(host, label);
+    const sel = document.createElement("select");
+    sel.classList.toggle("is-on", !!value);
+    const any = document.createElement("option");
+    any.value = "";
+    any.textContent = anyLabel;
+    sel.appendChild(any);
+    for (const [val, text, n] of options) {
+      const opt = document.createElement("option");
+      opt.value = val;
+      opt.textContent = n === null ? text : `${text} (${n})`;
+      sel.appendChild(opt);
+    }
+    // A value that no longer appears in the list would silently reset the
+    // select to "All" while the filter stayed on — keep it listed instead.
+    if (value && !options.some(([val]) => val === value)) {
+      const orphan = document.createElement("option");
+      orphan.value = value;
+      orphan.textContent = value;
+      sel.appendChild(orphan);
+    }
+    sel.value = value;
+    sel.addEventListener("change", () => onPick(sel.value));
+    host.appendChild(sel);
+  }
+
+  function activityFilters(host) {
+    const list = window.BBActivities ? BBActivities.list() : [];
+
+    const typeCounts = new Map();
+    const contactCounts = new Map();
+    for (const a of list) {
+      if (!a.scheduled_date) continue;
+      if (!inMonth(a.scheduled_date)) continue;
+      if (a.type) typeCounts.set(a.type, (typeCounts.get(a.type) || 0) + 1);
+      if (a.contact_id != null) {
+        const k = String(a.contact_id);
+        contactCounts.set(k, (contactCounts.get(k) || 0) + 1);
+      }
+    }
+
+    // Every type and contact any activity uses, so a filter can be set for a
+    // month other than the one on screen. Counts are for this month.
+    const types = new Set();
+    const contacts = new Set();
+    for (const a of list) {
+      if (!a.scheduled_date) continue;
+      if (a.type) types.add(a.type);
+      if (a.contact_id != null) contacts.add(String(a.contact_id));
+    }
+
+    // Nothing recorded to filter on yet — an empty pair of dropdowns is just
+    // furniture.
+    if (!types.size && !contacts.size) return;
+
+    renderSelect(host, {
+      label: "Type",
+      anyLabel: "All types",
+      value: acType,
+      options: [...types]
+        .sort((a, b) => a.localeCompare(b))
+        .map((t) => [t, t, typeCounts.get(t) || 0]),
+      onPick: (v) => {
+        acType = v;
+        renderCalendar();
+      },
+    });
+
+    const nameFor = (id) => {
+      const c = window.BBContacts ? BBContacts.byId(id) : null;
+      return c ? BBActivities.labelFor(c) : `Contact ${id}`;
+    };
+    renderSelect(host, {
+      label: "Contact",
+      anyLabel: "All contacts",
+      value: acContact,
+      options: [...contacts]
+        .map((id) => [id, nameFor(id), contactCounts.get(id) || 0])
+        .sort((a, b) => a[1].localeCompare(b[1])),
+      onPick: (v) => {
+        acContact = v;
+        renderCalendar();
+      },
+    });
+
+    if (acType || acContact) {
+      const clear = document.createElement("button");
+      clear.type = "button";
+      clear.className = "btn-ghost sm filter-bar-clear";
+      clear.textContent = "Clear filters";
+      clear.addEventListener("click", () => {
+        acType = "";
+        acContact = "";
+        renderCalendar();
+      });
+      host.appendChild(clear);
+    }
+  }
+
+  function bidFilters(host) {
+    const counts = new Map();
+    const all = new Set();
+    for (const o of loadOpps()) {
+      if (!o.bidDueDate) continue;
+      const d = divisionOf(o);
+      all.add(d);
+      if (inMonth(o.bidDueDate)) counts.set(d, (counts.get(d) || 0) + 1);
+    }
+    renderDivisionPills(host, {
+      label: "Division",
+      all: divisionOrder(all),
+      counts,
+      selected: bidDivisions,
+      onPick: (division) => {
+        const next = pickDivision(bidDivisions, divisionOrder(all), division);
+        bidDivisions.clear();
+        for (const d of next) bidDivisions.add(d);
+        renderCalendar();
+      },
+    });
+  }
+
+  function renderFilters() {
+    const host = $("cal-filters");
+    if (!host) return;
+    host.innerHTML = "";
+    host.hidden = false;
+    if (mode === "bids") bidFilters(host);
+    else activityFilters(host);
+    // Nothing to choose between: renderDivisionPills may have hidden it, and
+    // an activities bar always has its two selects.
+    if (!host.childElementCount) host.hidden = true;
+  }
+
   function renderCalendar() {
     const grid = $("cal-grid");
     if (!grid) return;
     if (!cursor) resetCursor();
     renderWeekdays();
+    renderFilters();
 
     const { year, month } = cursor;
     $("cal-title").textContent = `${MONTHS[month]} ${year}`;
@@ -174,6 +343,11 @@
     if (!cursor) resetCursor();
     if (mode === "activities" && window.BBActivities) {
       await BBActivities.fetchActivities();
+      // The contact filter names people, so it needs them loaded even when
+      // the Contacts tab has never been opened.
+      if (window.BBContacts && !BBContacts.list().length) {
+        await BBContacts.fetchContacts();
+      }
     }
     renderCalendar();
   }

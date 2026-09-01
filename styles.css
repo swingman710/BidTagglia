@@ -1248,6 +1248,18 @@ textarea:focus {
   --chip-line: color-mix(in srgb, var(--blue) 35%, transparent);
 }
 
+/* No severity to signal — a plain outline that fills in when picked. */
+.chip.plain {
+  --chip-ink: var(--blue);
+  --chip-bg: var(--surface);
+  --chip-line: var(--border-2);
+  color: var(--text);
+}
+
+.chip.plain:hover {
+  color: var(--blue-dark);
+}
+
 .chip:hover {
   border-color: var(--chip-ink);
 }
@@ -3570,5 +3582,66 @@ table.bids tbody tr.bid-row {
 
 /* The Companies heading pushes its button to the right end. */
 .company-table-head .btn-primary.inline {
+  margin-left: auto;
+}
+
+/* ==========================================================================
+   FILTER BAR — controls sitting directly above a table or the calendar grid
+   ========================================================================== */
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--page-bg);
+}
+
+.filter-bar[hidden] {
+  display: none;
+}
+
+.filter-bar-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-right: 2px;
+}
+
+/* A second label further along the bar needs air in front of it. */
+.filter-bar-label + .filter-bar-label,
+.filter-bar select + .filter-bar-label {
+  margin-left: 10px;
+}
+
+.filter-bar select {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 999px;
+  padding: 5px 10px;
+  max-width: 240px;
+}
+
+.filter-bar select:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+/* Marks a select that is actually narrowing the list. */
+.filter-bar select.is-on {
+  border-color: var(--blue);
+  color: var(--blue-dark);
+  background: var(--blue-soft);
+}
+
+.filter-bar .filter-bar-clear {
   margin-left: auto;
 }
