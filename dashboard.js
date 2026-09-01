@@ -536,11 +536,15 @@ function oppValue(o) {
   return Number(o.budgetedProjectValue ?? o.value ?? 0) || 0;
 }
 
-// A countdown only means something while a bid is still being worked. For
-// these statuses the cell is just greyed out.
-const NO_COUNTDOWN_STATUSES = new Set([
-  "Future Opportunity", "Lost", "No Bid", "On Hold (Bid)", "Won", "Cancelled",
-]);
+// The countdown is to the bid date, so it only means anything once the bid is
+// actually out — a Budgeting or Pending job isn't racing that clock. For every
+// other status the cell is greyed out and the due date next door speaks for
+// itself.
+const COUNTDOWN_STATUSES = new Set(["Bidding"]);
+
+function hasCountdown(o) {
+  return COUNTDOWN_STATUSES.has(o.status);
+}
 
 // Map an opportunity status to a pill color class.
 function statusClass(status) {
@@ -553,7 +557,7 @@ function statusClass(status) {
 
 // "Active" = still in play (excludes Won / Lost / No Bid).
 const ACTIVE_STATUSES = [
-  "Future Opportunity", "Pending", "Bidding", "Budgeting", "On Hold (Bid)",
+  "Future Opportunity", "Budgeting", "Bidding", "Pending", "On Hold (Bid)",
 ];
 function isActive(o) {
   return ACTIVE_STATUSES.includes(o.status);
@@ -562,9 +566,9 @@ function isActive(o) {
 // Funnel segment colors per status.
 const STATUS_COLORS = {
   "Future Opportunity": "#2563eb",
-  "Pending": "#0891b2",
-  "Bidding": "#7c3aed",
   "Budgeting": "#d97706",
+  "Bidding": "#7c3aed",
+  "Pending": "#0891b2",
   "On Hold (Bid)": "#64748b",
   "Won": "#16a34a",
   "Lost": "#dc2626",
@@ -743,7 +747,9 @@ const QUICK_FILTERS = {
     label: "Due this week",
     tone: "warn", // getting close
     match: (o) => {
-      if (!ACTIVE_SET.has(o.status)) return false;
+      // Both of these read the countdown, so they cover the same bids the
+      // countdown column does — the ones actually out to bid.
+      if (!hasCountdown(o)) return false;
       const d = daysUntil(o.bidDueDate);
       return d !== null && d >= 0 && d <= 7;
     },
@@ -752,8 +758,8 @@ const QUICK_FILTERS = {
     label: "Overdue",
     tone: "bad", // a date has already passed
     match: (o) => {
-      // Still being worked, but the date has passed — these need a decision.
-      if (!ACTIVE_SET.has(o.status)) return false;
+      // Out to bid and the date has passed — these need a decision.
+      if (!hasCountdown(o)) return false;
       const d = daysUntil(o.bidDueDate);
       return d !== null && d < 0;
     },
@@ -830,9 +836,14 @@ function dueYearOf(o) {
   return /^\d{4}$/.test(y) ? y : "No date";
 }
 
-const DAY_BUCKETS = ["Overdue", "Due in under 10 days", "10–29 days", "30+ days", "No date"];
+const DAY_BUCKETS = [
+  "Overdue", "Due in under 10 days", "10–29 days", "30+ days", "No date",
+  "Not out to bid",
+];
 
 function daysBucketOf(o) {
+  // Matches the column: no countdown shown, nothing to bucket by.
+  if (!hasCountdown(o)) return "Not out to bid";
   const d = daysUntil(o.bidDueDate);
   if (d === null) return "No date";
   if (d < 0) return "Overdue";
@@ -1362,7 +1373,7 @@ function render() {
     dueTd.textContent = formatDueDateTime(opp.bidDueDate, opp.bidDueTime);
 
     const daysTd = document.createElement("td");
-    if (NO_COUNTDOWN_STATUSES.has(opp.status)) {
+    if (!hasCountdown(opp)) {
       daysTd.className = "days-na"; // greyed out — the due date is next door
     } else {
       const days = daysUntil(opp.bidDueDate);
@@ -2253,7 +2264,7 @@ function detailSections(o) {
 // The outcomes below are off-ramps rather than stages: a bid leaves the
 // pipeline into one of them from wherever it happens to be.
 
-const STATUS_FLOW = ["Future Opportunity", "Pending", "Bidding", "Budgeting"];
+const STATUS_FLOW = ["Future Opportunity", "Budgeting", "Bidding", "Pending"];
 const STATUS_OUTCOMES = ["Won", "Lost", "No Bid", "On Hold (Bid)", "Cancelled"];
 
 async function setOppStatus(o, status) {
@@ -2506,7 +2517,7 @@ function printBid(o) {
 
   const days = daysUntil(o.bidDueDate);
   const countdown =
-    days === null || NO_COUNTDOWN_STATUSES.has(o.status)
+    days === null || !hasCountdown(o)
       ? ""
       : days < 0
         ? `${Math.abs(days)} days past due`
@@ -2814,9 +2825,11 @@ async function addPricing(row) {
   pricingDirty = true;
 }
 
-// Statuses a bid can be moved on from automatically. Once it's Budgeting, Won,
-// Lost or on hold, someone has made a decision the app shouldn't overrule.
-const AUTO_ADVANCE_FROM = new Set(["Future Opportunity", "Pending"]);
+// Statuses a bid can be moved on from automatically: the stages that come
+// before Bidding. Anywhere later — Pending, Won, Lost, on hold — someone has
+// made a decision the app shouldn't overrule, and moving it would be a step
+// backwards anyway.
+const AUTO_ADVANCE_FROM = new Set(["Future Opportunity", "Budgeting"]);
 
 async function updatePricingStatus(id, status) {
   const { error } = await sb.from(PRICING_TABLE).update({ status }).eq("id", id);

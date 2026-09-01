@@ -8,9 +8,11 @@ const FIELD_LISTS = {
   division: ["BEI", "BAI", "BAX", "BIT", "BEI-PHI", "BEI-CHE", "BPS"],
 
   // Dropdown
+  // In pipeline order: the four stages a bid walks, then the outcomes it can
+  // leave into.
   opportunityStatus: [
-    "Future Opportunity", "Pending", "Bidding", "Budgeting", "Lost", "No Bid",
-    "On Hold (Bid)", "Won", "Cancelled",
+    "Future Opportunity", "Budgeting", "Bidding", "Pending", "Won", "Lost",
+    "No Bid", "On Hold (Bid)", "Cancelled",
   ],
 
   // Searchable combobox (single)
