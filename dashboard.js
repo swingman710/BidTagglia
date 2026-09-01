@@ -3326,6 +3326,19 @@ function readForm() {
   };
 }
 
+// Enter inside a field used to submit the whole form, which saved the bid and
+// closed the modal out from under you — from a keystroke meant for the field
+// you were in. Only the Save button submits now. Textareas keep their
+// newlines, and the comboboxes that use Enter themselves have already dealt
+// with it by the time this runs.
+oppForm.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  const el = e.target;
+  if (el instanceof HTMLTextAreaElement) return;
+  if (el instanceof HTMLButtonElement) return; // Save, Cancel, Delete
+  e.preventDefault();
+});
+
 oppForm.addEventListener("submit", (e) => {
   e.preventDefault();
 
