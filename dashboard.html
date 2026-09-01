@@ -152,11 +152,13 @@
           <div class="table-head">
             <h2>Saved opportunities</h2>
             <span id="count" class="count-pill">0</span>
+            <!-- Shown while the pre-2024 history loads in the background -->
+            <span id="history-note" class="load-note" hidden></span>
             <!-- Quick filters, built by dashboard.js -->
             <div class="chips" id="quick-chips"></div>
             <div class="status-picker">
               <button id="status-toggle" type="button" class="btn-ghost sm"
-                      aria-expanded="false">Hide status</button>
+                      aria-expanded="false">Filters</button>
               <div id="status-menu" class="status-menu" hidden></div>
             </div>
           </div>
@@ -615,8 +617,7 @@
                 <input type="text" id="f-engineer" list="dl-engineer" placeholder="Select or add new…" />
                 <datalist id="dl-engineer"></datalist>
               </div>
-              </div>
-              <div class="field">
+              <div class="field full">
                 <label>Local unions <span class="hint-inline">(search and select one or more)</span></label>
                 <div class="multicombo" id="mc-local-unions"></div>
               </div>

@@ -257,10 +257,17 @@ function fromRow(row) {
 // table larger than that can't silently come back short.
 const PAGE_SIZE = 1000;
 
-async function fetchAll(table, { select = "*", order, ascending = true } = {}) {
+async function fetchAll(
+  table,
+  { select = "*", order, ascending = true, filter } = {}
+) {
   const out = [];
   for (let from = 0; ; from += PAGE_SIZE) {
-    let q = sb.from(table).select(select).range(from, from + PAGE_SIZE - 1);
+    let q = sb.from(table).select(select);
+    // Applied before the range so the paging counts filtered rows, not all
+    // of them — otherwise a filtered read would page over the wrong window.
+    if (filter) q = filter(q);
+    q = q.range(from, from + PAGE_SIZE - 1);
     if (order) q = q.order(order, { ascending });
     const { data, error } = await q;
     if (error) {
@@ -272,15 +279,117 @@ async function fetchAll(table, { select = "*", order, ascending = true } = {}) {
   }
 }
 
-async function fetchOpps() {
+// ---------- Staged load: recent years first ----------
+// The full history is thousands of bids, and waiting for all of it is what
+// made this page slow to open. The first read asks only for bids due in
+// RECENT_FROM or later, plus anything with no due date at all (a bid still
+// being set up). Everything earlier follows on its own a few seconds later,
+// so reports still cover every year — see scheduleHistoryLoad().
+
+const RECENT_YEAR_FROM = 2024;
+const RECENT_FROM = `${RECENT_YEAR_FROM}-01-01`;
+const HISTORY_DELAY = 4000; // cooldown before the background read starts
+
+let recentOpps = []; // due RECENT_FROM or later, or no due date at all
+let historyOpps = []; // due before RECENT_FROM
+let historyLoaded = false;
+let historyTimer = null;
+
+// oppsCache is the two buckets as one list. A bid whose due date moved across
+// the boundary can be in both reads, so the recent copy wins.
+function rebuildOppsCache() {
+  const seen = new Set(recentOpps.map((o) => String(o.id)));
+  oppsCache = recentOpps.concat(
+    historyOpps.filter((o) => !seen.has(String(o.id)))
+  );
+  clearSearchCache();
+  return oppsCache;
+}
+
+async function fetchOppBucket(history) {
   const { rows, error } = await fetchAll(SUPABASE_TABLE, {
     order: "created_at",
     ascending: false,
+    filter: (q) =>
+      history
+        ? q.lt("bid_due_date", RECENT_FROM)
+        : q.or(`bid_due_date.gte.${RECENT_FROM},bid_due_date.is.null`),
   });
-  if (error) return oppsCache;
-  oppsCache = rows.map(fromRow);
-  clearSearchCache();
-  return oppsCache;
+  return error ? null : rows.map(fromRow);
+}
+
+async function fetchOpps() {
+  const rows = await fetchOppBucket(false);
+  if (rows) recentOpps = rows;
+  return rebuildOppsCache();
+}
+
+async function fetchHistory() {
+  const rows = await fetchOppBucket(true);
+  if (!rows) return false;
+  historyOpps = rows;
+  historyLoaded = true;
+  rebuildOppsCache();
+  return true;
+}
+
+// The line beside the bid count while the earlier years are on their way.
+function setHistoryNote(text) {
+  const note = document.getElementById("history-note");
+  if (!note) return;
+  note.textContent = text || "";
+  note.hidden = !text;
+}
+
+async function runHistoryLoad() {
+  setHistoryNote(`loading ${RECENT_YEAR_FROM - 1} and earlier…`);
+  const ok = await fetchHistory();
+  setHistoryNote(ok ? "" : "earlier years could not be loaded");
+  afterOppsChanged();
+}
+
+function scheduleHistoryLoad() {
+  if (historyLoaded || historyTimer) return;
+  historyTimer = setTimeout(() => {
+    historyTimer = null;
+    runHistoryLoad();
+  }, HISTORY_DELAY);
+}
+
+// Reports are meant to cover every year, so opening one of those tabs spends
+// the rest of the cooldown rather than reporting on a partial history.
+function loadHistoryNow() {
+  if (historyLoaded) return;
+  if (historyTimer) {
+    clearTimeout(historyTimer);
+    historyTimer = null;
+    runHistoryLoad();
+  }
+}
+
+// A bid that moves out of the recent window is in neither read's results any
+// more — it left the recent bucket and the history read has already been and
+// gone. Pull that one row back on its own so it can't vanish until reload.
+async function syncOppRow(id) {
+  const key = String(id);
+  if (recentOpps.some((o) => String(o.id) === key)) return false;
+  const { data, error } = await sb
+    .from(SUPABASE_TABLE)
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error || !data) return false;
+  const opp = fromRow(data);
+  const i = historyOpps.findIndex((o) => String(o.id) === key);
+  if (i >= 0) historyOpps[i] = opp;
+  else historyOpps.push(opp);
+  rebuildOppsCache();
+  return true;
+}
+
+function forgetOppRow(id) {
+  const key = String(id);
+  historyOpps = historyOpps.filter((o) => String(o.id) !== key);
 }
 
 // Loads every quote, then derives the project-value lookup from it: the most
@@ -335,8 +444,17 @@ function showLoadingRows(n = 12) {
 
 async function refreshOpps() {
   showLoadingRows();
-  await fetchQuotes();
-  await fetchOpps();
+  // The quotes decide the Project Value column, so they're wanted for the
+  // first paint too — fetched alongside the bids rather than after them.
+  await Promise.all([fetchQuotes(), fetchOpps()]);
+  afterOppsChanged();
+  scheduleHistoryLoad();
+}
+
+// Everything that has to be redrawn once the bid list changes.
+function afterOppsChanged() {
+  seedYearFilter();
+  updateFilterButton();
   renderChips();
   render();
   renderCharts(oppsCache);
@@ -687,137 +805,427 @@ function renderChips() {
   }
 }
 
-// ---------- Hiding statuses ----------
-// Decided bids pile up — Lost, No Bid and Cancelled are most of the history
-// and almost never what you opened the dashboard to look at — so they start
-// hidden. The choice is remembered per browser.
+// ---------- Column filters ----------
+// One dropdown over the whole table: pick a column, then choose which of its
+// values the table shows. Decided bids pile up — Lost, No Bid and Cancelled
+// are most of the history and almost never what you opened the dashboard to
+// look at — so those statuses start hidden, as do bids due before the recent
+// window (see the staged load above). Every choice is remembered per browser.
+//
+// Columns whose values are effectively unique per bid (the name, the project
+// number) filter by "contains" instead of a checklist.
 
 const DEFAULT_HIDDEN = ["Lost", "No Bid", "Cancelled", "Won"];
-// Versioned: browsers that saved a choice under the old key would otherwise
-// keep the old default forever and never see this one.
-const HIDDEN_KEY = "battag_hidden_statuses_v2";
+const FILTER_KEY = "battag_col_filters_v1";
+// The status-only key this menu used to save under, read once so an existing
+// browser keeps the statuses it had chosen.
+const LEGACY_STATUS_KEY = "battag_hidden_statuses_v2";
 
-function loadHidden() {
+// ---- Bucketing, for the columns that hold numbers and dates ----
+// A checklist of every distinct project value would be useless, so those
+// columns offer ranges instead.
+
+function dueYearOf(o) {
+  const y = String(o.bidDueDate || "").slice(0, 4);
+  return /^\d{4}$/.test(y) ? y : "No date";
+}
+
+const DAY_BUCKETS = ["Overdue", "Due in under 10 days", "10–29 days", "30+ days", "No date"];
+
+function daysBucketOf(o) {
+  const d = daysUntil(o.bidDueDate);
+  if (d === null) return "No date";
+  if (d < 0) return "Overdue";
+  if (d < 10) return "Due in under 10 days";
+  if (d < 30) return "10–29 days";
+  return "30+ days";
+}
+
+const VALUE_BUCKETS = [
+  "Under $100k", "$100k–$500k", "$500k–$1M", "$1M–$5M", "$5M and up", "No value",
+];
+
+function valueBucketOf(o) {
+  const v = oppValue(o);
+  if (!v) return "No value";
+  if (v < 100000) return "Under $100k";
+  if (v < 500000) return "$100k–$500k";
+  if (v < 1000000) return "$500k–$1M";
+  if (v < 5000000) return "$1M–$5M";
+  return "$5M and up";
+}
+
+// One entry per table column, in the order the columns appear.
+//   value()   the bid's value in that column, as the checklist shows it
+//   type      "list" (checkboxes) or "text" (contains box)
+//   options   fixed value order; anything else sorts busiest-first
+const FILTER_COLUMNS = [
+  { key: "name", label: "Opportunity", type: "text", value: (o) => o.name || "" },
+  { key: "bidNumber", label: "Project #", type: "text", value: (o) => o.internalBidNumber || "" },
+  { key: "division", label: "Division", type: "list", value: (o) => o.division || "Unspecified" },
+  {
+    key: "bidDue", label: "Bid Due", type: "list", value: dueYearOf,
+    // Newest year first, "No date" last.
+    sort: (a, b) => (a === "No date") - (b === "No date") || b.localeCompare(a),
+  },
+  { key: "days", label: "Days Until Due", type: "list", value: daysBucketOf, options: DAY_BUCKETS },
+  { key: "value", label: "Project Value", type: "list", value: valueBucketOf, options: VALUE_BUCKETS },
+  { key: "leadEstimator", label: "Lead Estimator", type: "list", value: (o) => o.leadEstimator || "Unassigned" },
+  {
+    key: "status", label: "Status", type: "list", pill: true,
+    value: (o) => o.status || "Unspecified",
+    // Statuses nobody has used yet can still be hidden ahead of time.
+    extra: () => FIELD_LISTS.opportunityStatus,
+  },
+];
+
+const FILTER_BY_KEY = new Map(FILTER_COLUMNS.map((c) => [c.key, c]));
+
+// column key -> set of values the table leaves out
+const hiddenByColumn = new Map(FILTER_COLUMNS.map((c) => [c.key, new Set()]));
+// column key -> lower-cased substring, for the "contains" columns
+const textByColumn = new Map();
+// Columns the user has changed themselves. Defaults are only seeded into a
+// column until then, so re-opening the page doesn't undo a choice.
+const touchedColumns = new Set();
+
+function hiddenFor(key) {
+  return hiddenByColumn.get(key) || new Set();
+}
+
+// Kept as a name of its own: the status set is what the funnel and the quick
+// filters reason about.
+const hiddenStatuses = hiddenFor("status");
+
+function loadFilters() {
+  let saved = null;
   try {
-    const saved = localStorage.getItem(HIDDEN_KEY);
-    if (saved) return new Set(JSON.parse(saved));
+    saved = JSON.parse(localStorage.getItem(FILTER_KEY) || "null");
   } catch (e) {
-    // Storage disabled or holding something unparseable — fall back to the
-    // default rather than failing to render the table at all.
-    console.error("Could not read hidden statuses:", e);
+    console.error("Could not read the saved filters:", e);
   }
-  return new Set(DEFAULT_HIDDEN);
-}
 
-const hiddenStatuses = loadHidden();
+  if (saved) {
+    for (const [key, values] of Object.entries(saved.hidden || {})) {
+      // Filled in place: hiddenStatuses holds a reference to the status set.
+      const set = hiddenByColumn.get(key);
+      if (set) for (const v of values) set.add(v);
+    }
+    for (const [key, q] of Object.entries(saved.text || {})) {
+      if (q) textByColumn.set(key, q);
+    }
+    for (const key of saved.touched || []) touchedColumns.add(key);
+    return;
+  }
 
-function saveHidden() {
+  // First run under the new menu: carry over the old status-only choice.
   try {
-    localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hiddenStatuses]));
+    const legacy = localStorage.getItem(LEGACY_STATUS_KEY);
+    if (legacy) {
+      for (const s of JSON.parse(legacy)) hiddenStatuses.add(s);
+      touchedColumns.add("status");
+      return;
+    }
   } catch (e) {
-    console.error("Could not save hidden statuses:", e);
+    console.error("Could not read the saved statuses:", e);
+  }
+  DEFAULT_HIDDEN.forEach((s) => hiddenStatuses.add(s));
+}
+
+loadFilters();
+
+function saveFilters() {
+  try {
+    const hidden = {};
+    for (const [key, set] of hiddenByColumn) if (set.size) hidden[key] = [...set];
+    const text = {};
+    for (const [key, q] of textByColumn) if (q) text[key] = q;
+    localStorage.setItem(
+      FILTER_KEY,
+      JSON.stringify({ hidden, text, touched: [...touchedColumns] })
+    );
+  } catch (e) {
+    console.error("Could not save the filters:", e);
   }
 }
 
-// Every status the data actually uses, plus the standard list, so a status
-// nobody has used yet can still be un-hidden ahead of time.
-function allStatuses() {
-  const set = new Set(FIELD_LISTS.opportunityStatus);
-  for (const o of loadOpps()) set.add(o.status || "Unspecified");
-  return [...set];
+// Bids older than the recent window are loaded in the background for reports,
+// but left out of the table — they're history, and drawing them is what made
+// this page slow. Seeded on every load because the older years only appear in
+// the data once that background fetch lands; stops as soon as the user picks
+// years themselves.
+function seedYearFilter() {
+  if (touchedColumns.has("bidDue")) return;
+  const hidden = hiddenFor("bidDue");
+  for (const o of loadOpps()) {
+    const y = dueYearOf(o);
+    if (y !== "No date" && Number(y) < RECENT_YEAR_FROM) hidden.add(y);
+  }
 }
 
-function renderStatusMenu() {
+// Marks a column as the user's own and writes the whole lot to storage.
+function touchColumn(key) {
+  touchedColumns.add(key);
+  saveFilters();
+}
+
+// Every value a column holds across the data, plus any it declares up front.
+function columnValues(col) {
+  const counts = new Map();
+  for (const o of loadOpps()) {
+    const v = col.value(o);
+    counts.set(v, (counts.get(v) || 0) + 1);
+  }
+  for (const v of col.extra ? col.extra() : []) {
+    if (!counts.has(v)) counts.set(v, 0);
+  }
+  // A hidden value has to stay listed even if nothing carries it any more,
+  // or it could never be switched back on.
+  for (const v of hiddenFor(col.key)) if (!counts.has(v)) counts.set(v, 0);
+
+  let values = [...counts.keys()];
+  if (col.options) {
+    const order = new Map(col.options.map((v, i) => [v, i]));
+    values.sort((a, b) => (order.get(a) ?? 99) - (order.get(b) ?? 99));
+  } else if (col.sort) {
+    values.sort(col.sort);
+  } else {
+    // Busiest first — the values worth hiding are the ones with the most
+    // behind them.
+    values.sort(
+      (a, b) => (counts.get(b) || 0) - (counts.get(a) || 0) || a.localeCompare(b)
+    );
+  }
+  return { values, counts };
+}
+
+// Does this bid survive every column filter? `skipDefaults` drops the two
+// filters that are on without anyone asking (hidden statuses, the year
+// window) — a quick filter or a funnel segment is an explicit "show me
+// these", and shouldn't come back empty because of a default.
+function passesColumnFilters(o, skipDefaults) {
+  for (const col of FILTER_COLUMNS) {
+    if (skipDefaults && (col.key === "status" || col.key === "bidDue")) continue;
+    if (col.type === "text") {
+      const q = textByColumn.get(col.key);
+      if (q && !String(col.value(o)).toLowerCase().includes(q)) return false;
+    } else {
+      const hidden = hiddenFor(col.key);
+      if (hidden.size && hidden.has(col.value(o))) return false;
+    }
+  }
+  return true;
+}
+
+// How many columns are actually filtering something.
+function activeFilterCount() {
+  let n = 0;
+  for (const col of FILTER_COLUMNS) {
+    if (col.type === "text" ? textByColumn.get(col.key) : hiddenFor(col.key).size) n++;
+  }
+  return n;
+}
+
+// Which column's values the open menu is showing.
+let filterColumn = "status";
+// Set by render() so the menu can say how many bids came through.
+let lastVisibleCount = 0;
+
+function renderFilterMenu() {
   const menu = document.getElementById("status-menu");
   if (!menu) return;
   menu.innerHTML = "";
-
-  const counts = new Map();
-  for (const o of loadOpps()) {
-    const s = o.status || "Unspecified";
-    counts.set(s, (counts.get(s) || 0) + 1);
-  }
+  const col = FILTER_BY_KEY.get(filterColumn) || FILTER_COLUMNS[0];
 
   const head = document.createElement("div");
   head.className = "status-menu-head";
-  const shown = [...counts].reduce(
-    (n, [s, c]) => (hiddenStatuses.has(s) ? n : n + c),
-    0
-  );
   head.innerHTML =
-    "<span>Show statuses</span>" +
-    `<span class="shown-count">${shown.toLocaleString()} of ` +
+    "<span>Filter by column</span>" +
+    `<span class="shown-count">${lastVisibleCount.toLocaleString()} of ` +
     `${loadOpps().length.toLocaleString()} bids</span>`;
   menu.appendChild(head);
 
-  // Busiest statuses first — the ones worth hiding are the ones with the most
-  // behind them.
-  const statuses = allStatuses().sort(
-    (a, b) => (counts.get(b) || 0) - (counts.get(a) || 0) || a.localeCompare(b)
-  );
-
-  for (const status of statuses) {
-    const row = document.createElement("label");
-    row.className = "status-opt";
-    const on = !hiddenStatuses.has(status);
-    row.classList.toggle("is-off", !on);
-
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.checked = on;
-    cb.addEventListener("change", () => {
-      if (cb.checked) hiddenStatuses.delete(status);
-      else hiddenStatuses.add(status);
-      saveHidden();
-      renderStatusMenu(); // refresh the counts and dimming
-      updateStatusButton();
-      render();
+  // Column picker.
+  const tabs = document.createElement("div");
+  tabs.className = "filter-cols";
+  for (const c of FILTER_COLUMNS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "filter-col";
+    b.classList.toggle("is-on", c.key === col.key);
+    const on = c.type === "text" ? !!textByColumn.get(c.key) : hiddenFor(c.key).size > 0;
+    b.classList.toggle("is-filtered", on);
+    b.textContent = c.label;
+    if (on) b.title = "Filtering";
+    b.addEventListener("click", () => {
+      filterColumn = c.key;
+      renderFilterMenu();
     });
+    tabs.appendChild(b);
+  }
+  menu.appendChild(tabs);
 
-    const pill = document.createElement("span");
-    pill.className = `status ${statusClass(status)}`;
-    pill.textContent = status;
+  if (col.type === "text") {
+    renderTextFilter(menu, col);
+  } else {
+    renderListFilter(menu, col);
+  }
 
-    const n = document.createElement("span");
-    n.className = "opt-count";
-    n.textContent = (counts.get(status) || 0).toLocaleString();
-
-    row.append(cb, pill, n);
-    menu.appendChild(row);
+  // Earlier years arrive after the page does; say so rather than let the
+  // year list look like the whole history.
+  if (!historyLoaded && col.key === "bidDue") {
+    const note = document.createElement("p");
+    note.className = "filter-note";
+    note.textContent = `Bids due before ${RECENT_YEAR_FROM} are still loading.`;
+    menu.appendChild(note);
   }
 
   const actions = document.createElement("div");
   actions.className = "status-menu-actions";
-  for (const [label, fn] of [
-    ["Show all", () => hiddenStatuses.clear()],
+  const buttons = [["Show all", () => {
+    hiddenFor(col.key).clear();
+    textByColumn.delete(col.key);
+  }]];
+  if (col.key === "status") {
     // Back to the default view: exactly the decided statuses hidden, nothing
     // else — so it doubles as a reset.
-    ["Hide decided", () => {
+    buttons.push(["Hide decided", () => {
       hiddenStatuses.clear();
       DEFAULT_HIDDEN.forEach((s) => hiddenStatuses.add(s));
-    }],
-  ]) {
+    }]);
+  }
+  if (activeFilterCount() > 1) {
+    buttons.push(["Clear all", () => {
+      for (const set of hiddenByColumn.values()) set.clear();
+      textByColumn.clear();
+      for (const c of FILTER_COLUMNS) touchedColumns.add(c.key);
+    }]);
+  }
+  for (const [label, fn] of buttons) {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "btn-ghost sm";
     b.textContent = label;
     b.addEventListener("click", () => {
       fn();
-      saveHidden();
-      renderStatusMenu();
-      updateStatusButton();
+      touchColumn(col.key);
       render();
+      renderFilterMenu(); // refresh the counts and dimming
+      updateFilterButton();
     });
     actions.appendChild(b);
   }
   menu.appendChild(actions);
 }
 
-function updateStatusButton() {
+function renderTextFilter(menu, col) {
+  const wrap = document.createElement("div");
+  wrap.className = "filter-text";
+
+  const input = document.createElement("input");
+  input.type = "search";
+  input.placeholder = `${col.label} contains…`;
+  input.value = textByColumn.get(col.key) || "";
+
+  let timer = null;
+  input.addEventListener("input", () => {
+    const q = input.value.trim().toLowerCase();
+    if (q) textByColumn.set(col.key, q);
+    else textByColumn.delete(col.key);
+    touchColumn(col.key);
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      render();
+      updateFilterButton();
+      const head = menu.querySelector(".shown-count");
+      if (head) {
+        head.textContent =
+          `${lastVisibleCount.toLocaleString()} of ` +
+          `${loadOpps().length.toLocaleString()} bids`;
+      }
+    }, 150);
+  });
+
+  wrap.appendChild(input);
+  menu.appendChild(wrap);
+}
+
+// Long value lists (estimators, divisions on a big import) get a box to
+// narrow the list itself — separate from filtering the bids.
+const LIST_SEARCH_AT = 12;
+
+function renderListFilter(menu, col) {
+  const { values, counts } = columnValues(col);
+  const hidden = hiddenFor(col.key);
+
+  const list = document.createElement("div");
+  list.className = "filter-list";
+
+  const draw = (needle) => {
+    list.innerHTML = "";
+    const shown = needle
+      ? values.filter((v) => v.toLowerCase().includes(needle))
+      : values;
+    if (!shown.length) {
+      const p = document.createElement("p");
+      p.className = "filter-note";
+      p.textContent = "No matching values.";
+      list.appendChild(p);
+      return;
+    }
+    for (const value of shown) {
+      const row = document.createElement("label");
+      row.className = "status-opt";
+      const on = !hidden.has(value);
+      row.classList.toggle("is-off", !on);
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = on;
+      cb.addEventListener("change", () => {
+        if (cb.checked) hidden.delete(value);
+        else hidden.add(value);
+        touchColumn(col.key);
+        render();
+        renderFilterMenu();
+        updateFilterButton();
+      });
+
+      const label = document.createElement("span");
+      if (col.pill) {
+        label.className = `status ${statusClass(value)}`;
+      } else {
+        label.className = "opt-label";
+      }
+      label.textContent = value;
+
+      const n = document.createElement("span");
+      n.className = "opt-count";
+      n.textContent = (counts.get(value) || 0).toLocaleString();
+
+      row.append(cb, label, n);
+      list.appendChild(row);
+    }
+  };
+
+  if (values.length > LIST_SEARCH_AT) {
+    const find = document.createElement("input");
+    find.type = "search";
+    find.className = "filter-find";
+    find.placeholder = `Find a ${col.label.toLowerCase()}…`;
+    find.addEventListener("input", () => draw(find.value.trim().toLowerCase()));
+    menu.appendChild(find);
+  }
+
+  draw("");
+  menu.appendChild(list);
+}
+
+function updateFilterButton() {
   const btn = document.getElementById("status-toggle");
   if (!btn) return;
-  const n = hiddenStatuses.size;
-  btn.textContent = n ? `Hide status (${n})` : "Hide status";
+  const n = activeFilterCount();
+  btn.textContent = n ? `Filters (${n})` : "Filters";
   btn.classList.toggle("has-hidden", n > 0);
 }
 
@@ -899,13 +1307,16 @@ function render() {
         // so it wins over the hide list — otherwise picking Lost from the
         // funnel while Lost is hidden would return nothing and look broken.
         if (!statusFilter.has(status)) return false;
-      } else if (hiddenStatuses.has(status)) {
-        return false;
       }
+      // Both of those skip the two filters that are on by default (hidden
+      // statuses, the recent-year window); anything picked by hand in the
+      // filter menu still applies.
+      if (!passesColumnFilters(o, !!chip || statusFilter.size > 0)) return false;
       if (!query) return true;
       return searchBlob(o).includes(query);
     })
   );
+  lastVisibleCount = visible.length;
 
   // The stat strip describes every bid that matched, not just the page of
   // them the table draws — otherwise the totals would change meaning the
@@ -1008,6 +1419,9 @@ function showView(view) {
   for (const section of document.querySelectorAll("main .view")) {
     section.hidden = section.id !== `view-${view}`;
   }
+  // These read across the whole history, not just the recent window the table
+  // starts with.
+  if (view === "reports" || view === "companies") loadHistoryNow();
   // Every hook loads data. None of them run for someone the invite list turned
   // away, even if they've forced the hidden page back into view — the tabs
   // then show nothing, because nothing was ever fetched.
@@ -2833,6 +3247,8 @@ async function updateOpp(id, opp) {
     return;
   }
   await refreshOpps();
+  // Its due date may have moved it out of the recent window.
+  if (await syncOppRow(id)) afterOppsChanged();
 }
 
 // Removes the bid and its child rows (pricing quotes, project team), which
@@ -2852,6 +3268,7 @@ async function deleteOpp(id) {
     toastError("Could not delete opportunity: " + error.message);
     return;
   }
+  forgetOppRow(id);
   await refreshOpps();
 }
 
@@ -2930,7 +3347,7 @@ for (const th of document.querySelectorAll(".bids thead th[data-sort]")) {
 }
 markSortedHeader();
 
-// ---- Hide-status menu ----
+// ---- Column filter menu ----
 {
   const btn = document.getElementById("status-toggle");
   const menu = document.getElementById("status-menu");
@@ -2942,7 +3359,7 @@ markSortedHeader();
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       if (menu.hidden) {
-        renderStatusMenu(); // rebuild so newly-seen statuses appear
+        renderFilterMenu(); // rebuild so newly-seen values appear
         menu.hidden = false;
         btn.setAttribute("aria-expanded", "true");
       } else {
@@ -2954,7 +3371,7 @@ markSortedHeader();
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && !menu.hidden) close();
     });
-    updateStatusButton();
+    updateFilterButton();
   }
 }
 
