@@ -20,18 +20,10 @@
     list.map((v) => String(v ?? "").trim()).filter(Boolean);
 
   const DIMS = [
-    {
-      key: "leadEstimator",
-      label: "Lead Estimator",
-      // Estimators an admin has hidden from reports are left out entirely —
-      // not offered as a value to filter on, and not given a breakdown row.
-      get: (o) => {
-        const name = (o.leadEstimator || "").trim();
-        if (!name) return [];
-        const hidden = window.BBUsers ? BBUsers.hiddenFromReports() : new Set();
-        return hidden.has(name.toLowerCase()) ? [] : [name];
-      },
-    },
+    // Everyone who ever ran a bid, former employees included: their history is
+    // what the win rates are made of. Hiding someone is a dashboard-graph
+    // setting and deliberately has no effect here.
+    { key: "leadEstimator", label: "Lead Estimator", get: (o) => [o.leadEstimator] },
     {
       // Who we actually priced: the Company on each quote in the Pricing tab.
       key: "company",

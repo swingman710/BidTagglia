@@ -34,16 +34,16 @@
   // Grouped and sorted: the estimator with the most overdue first, and each
   // group's bids oldest first — the worst offender at the top of both lists.
   function groups() {
-    const hidden = window.BBUsers ? BBUsers.hiddenFromReports() : new Set();
     const mine = me();
 
     const byEstimator = new Map();
     for (const o of loadOpps()) {
       if (!isOverdueBid(o)) continue;
       const who = estimatorOf(o);
-      // Someone hidden from reports is hidden here too — they've left, or
-      // their history is deliberately out of the numbers.
-      if (hidden.has(who.toLowerCase())) continue;
+      // Former employees are NOT filtered out here, even though they are off
+      // the dashboard graphs. Their overdue bids are the ones most likely to
+      // be stale, and somebody still has to close or reassign them — dropping
+      // the section would only hide the work.
       if (onlyMine && mine && who.toLowerCase() !== mine) continue;
       const list = byEstimator.get(who);
       if (list) list.push(o);
@@ -63,11 +63,8 @@
   // The count on the nav tab. Deliberately ignores the "only mine" tick — the
   // badge is about the whole backlog, not the current view of it.
   function totalOverdue() {
-    const hidden = window.BBUsers ? BBUsers.hiddenFromReports() : new Set();
     let n = 0;
-    for (const o of loadOpps()) {
-      if (isOverdueBid(o) && !hidden.has(estimatorOf(o).toLowerCase())) n++;
-    }
+    for (const o of loadOpps()) if (isOverdueBid(o)) n++;
     return n;
   }
 

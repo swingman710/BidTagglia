@@ -2045,10 +2045,11 @@ function renderEstimatorChart(opps) {
   if (!canvas) return;
   const body = canvas.parentElement;
 
-  // Estimators an admin has taken out of the reports stay out of the chart —
-  // usually someone who has left, whose backlog would otherwise sit there
-  // forever looking like live work.
-  const hidden = window.BBUsers ? BBUsers.hiddenFromReports() : new Set();
+  // Former employees, ticked off the graphs on the Users tab. Their bids are
+  // still in every report and still on the Overdue tab — what this stops is a
+  // name that left two years ago sitting at the top of the chart as though it
+  // were live work.
+  const hidden = window.BBUsers ? BBUsers.hiddenFromCharts() : new Set();
 
   const counts = {};
   for (const o of opps) {

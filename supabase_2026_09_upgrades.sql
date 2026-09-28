@@ -5,7 +5,7 @@
 --  or right after deploying the matching code. Until it runs:
 --    * marking a quote Won fails with a constraint error
 --    * the contacts Active/Inactive toggle fails to save
---    * hiding a user from reports fails to save
+--    * keeping a user off the dashboard graphs fails to save
 --  Everything else in the app keeps working either way.
 --
 --  Safe to re-run.
@@ -42,24 +42,47 @@ alter table public.contacts
 
 
 -- ---------------------------------------------------------------------------
---  3. A user can be hidden from reports and graphs.
+--  3. A user can be kept off the dashboard graphs.
 --
---  Separate from `blocked`: blocked is about signing in, this is only about
---  whether their name is counted in the estimator chart, the Overdue tab and
---  the reports. Someone who left the company still has their bid history, and
---  you may or may not want it in the averages.
+--  For former employees. Someone who left still has years of bid history, and
+--  that history has to stay in the reports — it is what the win rates are made
+--  of. What it should stop doing is sitting at the top of the estimator chart
+--  on the dashboard as though it were live work.
+--
+--  So this is narrow on purpose: it hides a name from the dashboard graphs and
+--  nothing else. Reports, the Overdue tab and every total still count them.
+--
+--  Separate from `blocked`, which is only about signing in.
+--
+--  (An earlier draft of this file called the column hidden_from_reports, which
+--  described the opposite of what it does. Renamed here, so running either
+--  version of the file leaves the same column.)
 -- ---------------------------------------------------------------------------
 
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+              where table_name = 'app_members'
+                and column_name = 'hidden_from_reports')
+     and not exists (select 1 from information_schema.columns
+                      where table_name = 'app_members'
+                        and column_name = 'hidden_from_charts')
+  then
+    alter table public.app_members
+      rename column hidden_from_reports to hidden_from_charts;
+  end if;
+end $$;
+
 alter table public.app_members
-  add column if not exists hidden_from_reports boolean not null default false;
+  add column if not exists hidden_from_charts boolean not null default false;
 
 
 -- ---------------------------------------------------------------------------
 --  4. Estimators found in the bid history can be listed as users.
 --
 --  The Users tab now also lists every lead estimator who appears on a bid, so
---  they can be hidden from reports without having to be a real sign-in
---  account. Those rows carry source = 'estimator' and are always blocked:
+--  a former employee can be kept off the dashboard graphs without having to be
+--  a real sign-in account. Those rows carry source = 'estimator' and are always blocked:
 --  their `identity` is a person's name, never an email, so nothing can ever
 --  sign in as one. An admin can invite them properly from the same tab, which
 --  turns the row into a normal 'manual' account.
@@ -82,7 +105,7 @@ select
     where table_name = 'contacts' and column_name = 'active')         = 1 as contacts_have_active,
   (select count(*) from information_schema.columns
     where table_name = 'app_members'
-      and column_name = 'hidden_from_reports')                        = 1 as users_can_be_hidden,
+      and column_name = 'hidden_from_charts')                         = 1 as users_can_be_hidden,
   (select count(*) from pg_constraint
     where conname = 'app_members_source_check'
       and pg_get_constraintdef(oid) like '%estimator%')               = 1 as estimators_allowed;

@@ -11,11 +11,12 @@
 //  decided. See supabase_members.sql for the table.
 //
 //  The tab also lists every lead estimator who appears on a bid, seeded from
-//  the bid history (source = 'estimator'). Those rows exist so that someone
-//  who has never had a login can still be kept out of the reports. They are
-//  always blocked and their `identity` is "estimator:<name>", never an email,
-//  so nothing can sign in as one — access.js looks people up by the address
-//  they signed in with, which can never take that shape.
+//  the bid history (source = 'estimator'). Those rows exist so that a former
+//  employee — someone who never had a login, or whose login is long gone — can
+//  still be kept off the dashboard graphs. They are always blocked and their
+//  `identity` is "estimator:<name>", never an email, so nothing can sign in as
+//  one: access.js looks people up by the address they signed in with, which
+//  can never take that shape.
 // ===========================================================================
 
 (() => {
@@ -29,18 +30,20 @@
   const ESTIMATOR_PREFIX = "estimator:";
   const isEstimatorRow = (m) => m.source === "estimator";
 
-  // Lower-cased names the charts, the Overdue tab and the reports should leave
-  // out. Read by those from BBUsers.hiddenFromReports(); kept as a plain Set of
-  // names because that is what they have to match on — a bid records who the
-  // estimator was as text, not as a user id.
-  let hiddenNames = new Set();
+  // Lower-cased names to leave off the dashboard graphs — former employees,
+  // mostly. Deliberately NOT applied to the reports, the Overdue tab or any
+  // total: their bid history is real history and the win rates are made of it.
+  // Read through BBUsers.hiddenFromCharts(); a plain Set of names because that
+  // is what it has to match on — a bid records who the estimator was as text,
+  // not as a user id.
+  let chartHidden = new Set();
 
-  function rebuildHiddenNames() {
-    hiddenNames = new Set();
+  function rebuildChartHidden() {
+    chartHidden = new Set();
     for (const m of members) {
-      if (!m.hidden_from_reports) continue;
+      if (!m.hidden_from_charts) continue;
       const name = (m.name || "").trim().toLowerCase();
-      if (name) hiddenNames.add(name);
+      if (name) chartHidden.add(name);
     }
   }
 
@@ -60,24 +63,26 @@
     const { rows, error } = await fetchAll(TABLE, { order: "invited_at" });
     if (error) return members;
     members = rows;
-    rebuildHiddenNames();
+    rebuildChartHidden();
     return members;
   }
 
-  async function setHiddenFromReports(id, hidden) {
+  async function setHiddenFromCharts(id, hidden) {
     const { error } = await sb
       .from(TABLE)
-      .update({ hidden_from_reports: hidden })
+      .update({ hidden_from_charts: hidden })
       .eq("id", id);
     if (error) {
-      toastError("Could not change this: " + error.message);
+      toastError(
+        error.message.includes("hidden_from_charts")
+          ? "The database is missing the hidden_from_charts column — run " +
+            "supabase_2026_09_upgrades.sql in the Supabase SQL editor."
+          : "Could not change this: " + error.message
+      );
       return;
     }
     await renderUsers();
-    // The chart, the badge and whichever tab is open all read the set.
     renderCharts(loadOpps());
-    if (window.BBOverdue) BBOverdue.renderBadge();
-    refreshActiveView();
   }
 
   // Every lead estimator who appears on a bid, added to the list once so they
@@ -122,9 +127,20 @@
 
     const { error } = await sb.from(TABLE).insert(rows);
     if (error) {
-      // Not worth a red toast — the tab still works, there are just no
-      // estimator rows in it.
-      console.error("Could not add estimators from the bid history:", error.message);
+      // Silence here is the worst outcome: the tab looks like it simply has no
+      // estimators in it, and the reason (almost always the migration not
+      // having been run) is buried in the console. Say it, and allow a retry.
+      seeded = false;
+      const missingMigration =
+        error.message.includes("app_members_source_check") ||
+        error.message.includes("source");
+      toastError(
+        missingMigration
+          ? "Could not add the estimators: the database doesn't allow " +
+            "source = 'estimator' yet. Run supabase_2026_09_upgrades.sql in " +
+            "the Supabase SQL editor, then reopen this tab."
+          : "Could not add estimators from the bid history: " + error.message
+      );
       return 0;
     }
     return rows.length;
@@ -346,20 +362,20 @@
       sel.addEventListener("change", () => setRole(m.id, sel.value));
       roleTd.appendChild(sel);
 
-      // Counted in the estimator chart, the Overdue tab and the reports?
+      // On the dashboard graphs? Reports are not affected either way.
       const repTd = document.createElement("td");
       const repLabel = document.createElement("label");
       repLabel.className = "rep-toggle";
       const repBox = document.createElement("input");
       repBox.type = "checkbox";
-      repBox.checked = !m.hidden_from_reports;
-      repBox.title = m.hidden_from_reports
-        ? "Left out of the estimator chart, the Overdue tab and the reports"
-        : "Counted in the estimator chart, the Overdue tab and the reports";
+      repBox.checked = !m.hidden_from_charts;
+      repBox.title = m.hidden_from_charts
+        ? "Off the dashboard graphs. Their bids still count in every report."
+        : "Shown on the dashboard graphs. Untick for a former employee.";
       // Matching is by name, so a row without one can't be matched to a bid.
       repBox.disabled = !(m.name || "").trim();
       repBox.addEventListener("change", () =>
-        setHiddenFromReports(m.id, !repBox.checked)
+        setHiddenFromCharts(m.id, !repBox.checked)
       );
       repLabel.appendChild(repBox);
       repTd.appendChild(repLabel);
@@ -430,12 +446,11 @@
     });
   })();
 
-  // Everyone else reads the hidden list, not the members. Loaded for any
-  // signed-in person, not only an admin — the charts have to honour it too.
+  // Loaded for any signed-in person, not only an admin: the dashboard graphs
+  // have to honour the list whoever is looking at them.
   BBAccess.ready.then(async () => {
     await fetchMembers();
     renderCharts(loadOpps());
-    if (window.BBOverdue) BBOverdue.renderBadge();
   });
 
   window.BBUsers = {
@@ -443,7 +458,10 @@
     renderUsers,
     MEMBER_ROLES,
     // Lower-cased estimator names to leave out of the charts and reports.
-    hiddenFromReports: () => hiddenNames,
-    isHidden: (name) => hiddenNames.has(String(name || "").trim().toLowerCase()),
+    // Names to leave off the dashboard graphs. Nothing else consults this —
+    // see the comment on chartHidden.
+    hiddenFromCharts: () => chartHidden,
+    isHiddenFromCharts: (name) =>
+      chartHidden.has(String(name || "").trim().toLowerCase()),
   };
 })();
