@@ -489,7 +489,8 @@ function afterOppsChanged() {
   renderChips();
   render();
   renderCharts(oppsCache);
-  refreshActiveView(); // the Reports tab lists bids too
+  if (window.BBOverdue) BBOverdue.renderBadge();
+  refreshActiveView(); // the Reports and Overdue tabs list bids too
 }
 
 // ---------- Static option sets ----------
@@ -2024,11 +2025,16 @@ function renderEstimatorChart(opps) {
   if (!canvas) return;
   const body = canvas.parentElement;
 
+  // Estimators an admin has taken out of the reports stay out of the chart —
+  // usually someone who has left, whose backlog would otherwise sit there
+  // forever looking like live work.
+  const hidden = window.BBUsers ? BBUsers.hiddenFromReports() : new Set();
+
   const counts = {};
   for (const o of opps) {
     if (!isActive(o)) continue;
     const e = (o.leadEstimator || "").trim();
-    if (!e) continue;
+    if (!e || hidden.has(e.toLowerCase())) continue;
     counts[e] = (counts[e] || 0) + 1;
   }
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);

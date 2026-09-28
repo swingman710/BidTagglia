@@ -86,6 +86,9 @@
     <nav class="mainnav">
       <div class="mainnav-inner">
         <button class="nav-tab active" data-view="opportunities">Opportunities</button>
+        <button class="nav-tab" data-view="overdue">
+          Overdue<span class="tab-badge" id="overdue-badge" hidden>0</span>
+        </button>
         <button class="nav-tab" data-view="reports">Reports</button>
         <button class="nav-tab" data-view="companies">Companies</button>
         <button class="nav-tab" data-view="contacts">Contacts</button>
@@ -187,6 +190,26 @@
 
           <div id="row-limit" class="row-limit" hidden></div>
           <div id="empty" class="empty">No opportunities yet — add one above.</div>
+        </section>
+       </div>
+
+       <!-- ================= Overdue view ================= -->
+       <div class="view" id="view-overdue" hidden>
+        <section class="panel">
+          <div class="table-head">
+            <h2>Overdue bids by estimator</h2>
+            <span id="overdue-count" class="count-pill">0</span>
+            <span class="rep-hint">
+              Past their bid due date and still showing as live. Set the real
+              status here and they drop off the list.
+            </span>
+            <label class="head-check">
+              <input type="checkbox" id="overdue-mine" />
+              <span>Only mine</span>
+            </label>
+          </div>
+          <div id="overdue-body" class="overdue-body"></div>
+          <div id="overdue-empty" class="empty">Nothing overdue — everything is up to date.</div>
         </section>
        </div>
 
@@ -502,8 +525,9 @@
             <h2>Users</h2>
             <span id="user-count" class="count-pill">0</span>
             <span class="rep-hint">
-              Only the addresses on this list can sign in. Roles are recorded
-              but not enforced yet.
+              Only the addresses on this list can sign in. Estimators picked up
+              from the bid history are listed too, so they can be kept out of
+              the reports — they cannot sign in.
             </span>
             <button id="new-user" class="btn-primary inline">+ Add user</button>
           </div>
@@ -539,6 +563,7 @@
                   <th>Added</th>
                   <th>Last active</th>
                   <th>Permission level</th>
+                  <th title="Leave their bids out of the estimator chart, the Overdue tab and the reports">In reports</th>
                   <th class="col-status">Access</th>
                 </tr>
               </thead>
@@ -902,6 +927,7 @@
     <script src="data.js"></script>
     <script src="dashboard.js"></script>
     <script src="reports.js"></script>
+    <script src="overdue.js"></script>
     <script src="companies.js"></script>
     <script src="contacts.js"></script>
     <script src="activities.js"></script>

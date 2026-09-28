@@ -9,6 +9,13 @@
 //  Only ADMIN_EMAIL sees this tab. Roles are stored and editable but not
 //  enforced anywhere yet — that's deliberate, wire them up when the rules are
 //  decided. See supabase_members.sql for the table.
+//
+//  The tab also lists every lead estimator who appears on a bid, seeded from
+//  the bid history (source = 'estimator'). Those rows exist so that someone
+//  who has never had a login can still be kept out of the reports. They are
+//  always blocked and their `identity` is "estimator:<name>", never an email,
+//  so nothing can sign in as one — access.js looks people up by the address
+//  they signed in with, which can never take that shape.
 // ===========================================================================
 
 (() => {
@@ -17,6 +24,25 @@
 
   let members = [];
   let me = null; // this session's app_members row
+  let seeded = false; // estimators pulled out of the bid history yet?
+
+  const ESTIMATOR_PREFIX = "estimator:";
+  const isEstimatorRow = (m) => m.source === "estimator";
+
+  // Lower-cased names the charts, the Overdue tab and the reports should leave
+  // out. Read by those from BBUsers.hiddenFromReports(); kept as a plain Set of
+  // names because that is what they have to match on — a bid records who the
+  // estimator was as text, not as a user id.
+  let hiddenNames = new Set();
+
+  function rebuildHiddenNames() {
+    hiddenNames = new Set();
+    for (const m of members) {
+      if (!m.hidden_from_reports) continue;
+      const name = (m.name || "").trim().toLowerCase();
+      if (name) hiddenNames.add(name);
+    }
+  }
 
   function formatStamp(value) {
     if (!value) return "—";
@@ -34,7 +60,74 @@
     const { rows, error } = await fetchAll(TABLE, { order: "invited_at" });
     if (error) return members;
     members = rows;
+    rebuildHiddenNames();
     return members;
+  }
+
+  async function setHiddenFromReports(id, hidden) {
+    const { error } = await sb
+      .from(TABLE)
+      .update({ hidden_from_reports: hidden })
+      .eq("id", id);
+    if (error) {
+      toastError("Could not change this: " + error.message);
+      return;
+    }
+    await renderUsers();
+    // The chart, the badge and whichever tab is open all read the set.
+    renderCharts(loadOpps());
+    if (window.BBOverdue) BBOverdue.renderBadge();
+    refreshActiveView();
+  }
+
+  // Every lead estimator who appears on a bid, added to the list once so they
+  // can be hidden from the reports without needing a login. Idempotent: rows
+  // that already exist, under either an estimator row or a real account with
+  // the same name, are skipped.
+  async function seedEstimators() {
+    if (seeded) return 0;
+    seeded = true;
+    await ensureHistory();
+
+    const known = new Set();
+    for (const m of members) {
+      const name = (m.name || "").trim().toLowerCase();
+      if (name) known.add(name);
+      known.add(String(m.identity || "").toLowerCase());
+    }
+
+    const found = new Map(); // lower-cased -> the spelling to store
+    for (const o of loadOpps()) {
+      const name = (o.leadEstimator || "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (known.has(key) || known.has(ESTIMATOR_PREFIX + key)) continue;
+      if (!found.has(key)) found.set(key, name);
+    }
+    if (!found.size) return 0;
+
+    const rows = [...found].map(([key, name]) => ({
+      identity: ESTIMATOR_PREFIX + key,
+      name,
+      email: null,
+      source: "estimator",
+      role: "User",
+      // Not a login. Blocked as well as unreachable, so that stays true even
+      // if someone later edits the identity by hand.
+      blocked: true,
+      invited_by: me ? me.identity : null,
+      first_seen_at: null,
+      last_active_at: null,
+    }));
+
+    const { error } = await sb.from(TABLE).insert(rows);
+    if (error) {
+      // Not worth a red toast — the tab still works, there are just no
+      // estimator rows in it.
+      console.error("Could not add estimators from the bid history:", error.message);
+      return 0;
+    }
+    return rows.length;
   }
 
   async function setRole(id, role) {
@@ -51,7 +144,11 @@
 
   async function removeMember(member) {
     const who = member.name || member.identity;
-    if (!confirm(`Remove ${who}? They won't be able to sign in again.`)) return;
+    const why = isEstimatorRow(member)
+      ? `Remove ${who} from this list? Their bids are untouched, but they will ` +
+        "be added back the next time this tab reads the bid history."
+      : `Remove ${who}? They won't be able to sign in again.`;
+    if (!confirm(why)) return;
     const { error } = await sb.from(TABLE).delete().eq("id", member.id);
     if (error) {
       toastError("Could not remove user: " + error.message);
@@ -167,10 +264,24 @@
     $("user-empty").style.display = members.length ? "none" : "block";
     tbody.innerHTML = "";
 
-    for (const m of members) {
+    // Real accounts first, then the estimators picked up from the history —
+    // the list is about who can sign in before it is about who bids.
+    const ordered = [...members].sort(
+      (a, b) =>
+        isEstimatorRow(a) - isEstimatorRow(b) ||
+        String(a.name || a.identity).localeCompare(String(b.name || b.identity))
+    );
+
+    for (const m of ordered) {
       const self = me && m.id === me.id;
+      const estimator = isEstimatorRow(m);
       const tr = document.createElement("tr");
-      if (m.blocked) tr.className = "is-blocked";
+      const classes = [];
+      // An estimator row isn't "blocked" in any meaningful sense — it was
+      // never an account — so don't dress it up as one.
+      if (m.blocked && !estimator) classes.push("is-blocked");
+      if (estimator) classes.push("is-estimator");
+      tr.className = classes.join(" ");
 
       const nameTd = document.createElement("td");
       nameTd.textContent = m.name || "—";
@@ -182,12 +293,25 @@
       }
 
       const idTd = document.createElement("td");
-      idTd.textContent = m.email || m.identity;
+      if (estimator) {
+        const tag = document.createElement("span");
+        tag.className = "src-pill";
+        tag.textContent = "from bid history";
+        tag.title =
+          "Picked up from the bids they are the lead estimator on. " +
+          "Not a sign-in account.";
+        idTd.appendChild(tag);
+      } else {
+        idTd.textContent = m.email || m.identity;
+      }
 
       // Someone who has never signed in is still just an invitation.
       const stateTd = document.createElement("td");
       const state = document.createElement("span");
-      if (m.blocked) {
+      if (estimator) {
+        state.className = "status";
+        state.textContent = "No login";
+      } else if (m.blocked) {
         state.className = "status lost";
         state.textContent = "Blocked";
       } else if (m.first_seen_at) {
@@ -215,20 +339,57 @@
         sel.appendChild(opt);
       }
       sel.value = MEMBER_ROLES.includes(m.role) ? m.role : "User";
-      // An admin locking themselves out of their own account helps nobody.
-      sel.disabled = self;
+      // An admin locking themselves out of their own account helps nobody, and
+      // a role on a row that cannot sign in means nothing.
+      sel.disabled = self || estimator;
+      if (estimator) sel.title = "Not a sign-in account";
       sel.addEventListener("change", () => setRole(m.id, sel.value));
       roleTd.appendChild(sel);
 
+      // Counted in the estimator chart, the Overdue tab and the reports?
+      const repTd = document.createElement("td");
+      const repLabel = document.createElement("label");
+      repLabel.className = "rep-toggle";
+      const repBox = document.createElement("input");
+      repBox.type = "checkbox";
+      repBox.checked = !m.hidden_from_reports;
+      repBox.title = m.hidden_from_reports
+        ? "Left out of the estimator chart, the Overdue tab and the reports"
+        : "Counted in the estimator chart, the Overdue tab and the reports";
+      // Matching is by name, so a row without one can't be matched to a bid.
+      repBox.disabled = !(m.name || "").trim();
+      repBox.addEventListener("change", () =>
+        setHiddenFromReports(m.id, !repBox.checked)
+      );
+      repLabel.appendChild(repBox);
+      repTd.appendChild(repLabel);
+
       const accessTd = document.createElement("td");
       accessTd.className = "col-status";
-      const block = document.createElement("button");
-      block.type = "button";
-      block.className = m.blocked ? "btn-ghost sm" : "btn-ghost sm danger";
-      block.textContent = m.blocked ? "Unblock" : "Block";
-      block.disabled = self;
-      block.title = self ? "You can't block yourself" : "";
-      block.addEventListener("click", () => setBlocked(m.id, !m.blocked));
+      if (!estimator) {
+        const block = document.createElement("button");
+        block.type = "button";
+        block.className = m.blocked ? "btn-ghost sm" : "btn-ghost sm danger";
+        block.textContent = m.blocked ? "Unblock" : "Block";
+        block.disabled = self;
+        block.title = self ? "You can't block yourself" : "";
+        block.addEventListener("click", () => setBlocked(m.id, !m.blocked));
+        accessTd.appendChild(block);
+      } else {
+        // The useful action on an estimator row is turning it into a real
+        // account, which is the add form with the name already filled in.
+        const invite = document.createElement("button");
+        invite.type = "button";
+        invite.className = "btn-ghost sm";
+        invite.textContent = "Invite";
+        invite.title = "Give this person a login";
+        invite.addEventListener("click", () => {
+          showAddForm(true);
+          $("nu-name").value = m.name || "";
+          $("nu-email").focus();
+        });
+        accessTd.appendChild(invite);
+      }
 
       const remove = document.createElement("button");
       remove.type = "button";
@@ -237,10 +398,9 @@
       remove.disabled = self;
       remove.title = self ? "You can't remove yourself" : "";
       remove.addEventListener("click", () => removeMember(m));
+      accessTd.appendChild(remove);
 
-      accessTd.append(block, remove);
-
-      tr.append(nameTd, idTd, stateTd, addedTd, lastTd, roleTd, accessTd);
+      tr.append(nameTd, idTd, stateTd, addedTd, lastTd, roleTd, repTd, accessTd);
       tbody.appendChild(tr);
     }
   }
@@ -257,8 +417,33 @@
     const tab = document.querySelector('.nav-tab[data-view="users"]');
     if (tab) tab.hidden = false;
     buildAddForm();
-    onViewOpen("users", renderUsers);
+    onViewOpen("users", async () => {
+      await fetchMembers();
+      const added = await seedEstimators();
+      if (added) {
+        await fetchMembers();
+        toastOk(
+          `Added ${added} estimator${added === 1 ? "" : "s"} from the bid history`
+        );
+      }
+      await renderUsers();
+    });
   })();
 
-  window.BBUsers = { fetchMembers, renderUsers, MEMBER_ROLES };
+  // Everyone else reads the hidden list, not the members. Loaded for any
+  // signed-in person, not only an admin — the charts have to honour it too.
+  BBAccess.ready.then(async () => {
+    await fetchMembers();
+    renderCharts(loadOpps());
+    if (window.BBOverdue) BBOverdue.renderBadge();
+  });
+
+  window.BBUsers = {
+    fetchMembers,
+    renderUsers,
+    MEMBER_ROLES,
+    // Lower-cased estimator names to leave out of the charts and reports.
+    hiddenFromReports: () => hiddenNames,
+    isHidden: (name) => hiddenNames.has(String(name || "").trim().toLowerCase()),
+  };
 })();
