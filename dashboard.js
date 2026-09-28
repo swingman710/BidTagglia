@@ -591,6 +591,22 @@ function statusClass(status) {
 const ACTIVE_STATUSES = [
   "Future Opportunity", "Budgeting", "Bidding", "Pending", "On Hold (Bid)",
 ];
+
+// A bid past its due date while still reading as live. Everything active
+// except On Hold (Bid) — that one is somebody deliberately parking a bid, not
+// somebody forgetting to update it. Used by the Overdue chip and the Overdue
+// tab, which have to agree: two different numbers under the same word is how
+// people learn to distrust both.
+const OVERDUE_STATUSES = [
+  "Future Opportunity", "Budgeting", "Bidding", "Pending",
+];
+const OVERDUE_SET = new Set(OVERDUE_STATUSES);
+
+function isOverdueBid(o) {
+  if (!OVERDUE_SET.has(o.status)) return false;
+  const days = daysUntil(o.bidDueDate);
+  return days !== null && days < 0;
+}
 function isActive(o) {
   return ACTIVE_STATUSES.includes(o.status);
 }
@@ -880,9 +896,10 @@ const QUICK_FILTERS = {
     label: "Due this week",
     tone: "warn", // getting close
     match: (o) => {
-      // Both of these read the countdown, so they cover the same bids the
-      // countdown column does — the ones actually out to bid.
-      if (!hasCountdown(o)) return false;
+      // Not tied to the countdown column, which only shows once a bid is out.
+      // A job still being budgeted that is due on Friday is exactly what this
+      // chip is for.
+      if (!OVERDUE_SET.has(o.status)) return false;
       const d = daysUntil(o.bidDueDate);
       return d !== null && d >= 0 && d <= 7;
     },
@@ -890,12 +907,8 @@ const QUICK_FILTERS = {
   overdue: {
     label: "Overdue",
     tone: "bad", // a date has already passed
-    match: (o) => {
-      // Out to bid and the date has passed — these need a decision.
-      if (!hasCountdown(o)) return false;
-      const d = daysUntil(o.bidDueDate);
-      return d !== null && d < 0;
-    },
+    // Same rule as the Overdue tab, deliberately.
+    match: isOverdueBid,
   },
   mine: {
     label: "My bids",

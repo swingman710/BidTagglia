@@ -7,19 +7,13 @@
 //  it is "nobody wrote down what happened". So every row carries the outcome
 //  buttons with it, and acting on one takes the row off the list.
 //
-//  Statuses that are already a decision — Won, Lost, No Bid, Cancelled — are
-//  not overdue by definition. On Hold (Bid) is a decision too: it is somebody
-//  deliberately parking a bid, so nagging about it would train people to
-//  ignore the tab.
+//  What counts as overdue is OVERDUE_STATUSES / isOverdueBid() in dashboard.js,
+//  shared with the Overdue quick filter on the Opportunities tab so the two
+//  can never disagree.
 // ===========================================================================
-
-const OVERDUE_STATUSES = [
-  "Future Opportunity", "Budgeting", "Bidding", "Pending",
-];
 
 (() => {
   const $ = (id) => document.getElementById(id);
-  const OVERDUE_SET = new Set(OVERDUE_STATUSES);
 
   let onlyMine = false;
   // Estimators with a section open. Everyone starts collapsed except the
@@ -31,12 +25,6 @@ const OVERDUE_STATUSES = [
 
   function estimatorOf(o) {
     return (o.leadEstimator || "").trim() || UNASSIGNED;
-  }
-
-  function isOverdue(o) {
-    if (!OVERDUE_SET.has(o.status)) return false;
-    const days = daysUntil(o.bidDueDate);
-    return days !== null && days < 0;
   }
 
   function me() {
@@ -51,7 +39,7 @@ const OVERDUE_STATUSES = [
 
     const byEstimator = new Map();
     for (const o of loadOpps()) {
-      if (!isOverdue(o)) continue;
+      if (!isOverdueBid(o)) continue;
       const who = estimatorOf(o);
       // Someone hidden from reports is hidden here too — they've left, or
       // their history is deliberately out of the numbers.
@@ -78,7 +66,7 @@ const OVERDUE_STATUSES = [
     const hidden = window.BBUsers ? BBUsers.hiddenFromReports() : new Set();
     let n = 0;
     for (const o of loadOpps()) {
-      if (isOverdue(o) && !hidden.has(estimatorOf(o).toLowerCase())) n++;
+      if (isOverdueBid(o) && !hidden.has(estimatorOf(o).toLowerCase())) n++;
     }
     return n;
   }
@@ -234,5 +222,5 @@ const OVERDUE_STATUSES = [
   // whenever the bid list changes rather than only on view.
   BBAccess.ready.then(renderBadge);
 
-  window.BBOverdue = { renderOverdue, renderBadge, isOverdue, OVERDUE_STATUSES };
+  window.BBOverdue = { renderOverdue, renderBadge };
 })();
