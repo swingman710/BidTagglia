@@ -737,10 +737,16 @@ function clearSearchCache() {
 //
 // The rules are deliberately tight, because a marker on half the table would
 // be ignored within a week:
-//   * the same project number (those are meant to be unique), or
+//   * the same project number AND the same division, or
 //   * the same name AND the same bid due date, or
 //   * the same name AND the same owner.
-// A name on its own is not enough — "Fire Alarm" recurs for years.
+//
+// A name on its own is not enough — "Fire Alarm" recurs for years. A project
+// number on its own is not enough either: the divisions number their jobs
+// independently, so the same number in BIT and in BEI is two unrelated
+// projects. A bid with no division recorded is left out of that rule
+// altogether rather than lumped in with the other blanks — without a division
+// there is no way to tell which case it is.
 
 const duplicateOf = new Map(); // opportunity id -> [the bids it looks like]
 
@@ -764,7 +770,8 @@ function rebuildDuplicates() {
   for (const o of loadOpps()) {
     const name = dupeNormal(o.name);
     const number = dupeNormal(o.internalBidNumber);
-    if (number) add(`#${number}`, o);
+    const division = dupeNormal(o.division);
+    if (number && division) add(`#${division}|${number}`, o);
     if (name && o.bidDueDate) add(`d|${name}|${o.bidDueDate}`, o);
     if (name && o.ownerCustomer) add(`o|${name}|${dupeNormal(o.ownerCustomer)}`, o);
   }
@@ -2786,8 +2793,8 @@ function renderDuplicateNote(o, mount) {
   const text = document.createElement("span");
   text.textContent =
     `Looks like ${others.length} other bid${others.length === 1 ? "" : "s"} ` +
-    "already on file — same project number, or the same name with the same " +
-    "due date or owner.";
+    "already on file — same project number within the same division, or the " +
+    "same name with the same due date or owner.";
   head.appendChild(text);
   box.appendChild(head);
 
