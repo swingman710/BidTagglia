@@ -484,7 +484,7 @@ async function refreshOpps() {
 // Everything that has to be redrawn once the bid list changes.
 function afterOppsChanged() {
   rebuildDuplicates();
-  seedYearFilter();
+  seedDefaults();
   updateFilterButton();
   renderChips();
   render();
@@ -965,19 +965,31 @@ function renderChips() {
 }
 
 // ---------- Column filters ----------
-// One dropdown over the whole table: pick a column, then choose which of its
-// values the table shows. Decided bids pile up — Lost, No Bid and Cancelled
-// are most of the history and almost never what you opened the dashboard to
-// look at — so those statuses start hidden, as do bids due before the recent
-// window (see the staged load above). Every choice is remembered per browser.
+// One dropdown over the whole table: pick a column, then tick the values you
+// want. Every choice is remembered per browser.
+//
+// A column's set holds what is SELECTED, and an empty set means no filter at
+// all rather than "show nothing" — the same rule the division pills use. So
+// clearing a column empties it and every tick goes away, which is what
+// "clear" should look like; the old shape stored what was hidden, and
+// clearing it filled every box instead.
+//
+// It also means a value that turns up later — next year's bids, a status
+// added to the list — is included without anyone doing anything, because
+// nothing is excluding it.
 //
 // Columns whose values are effectively unique per bid (the name, the project
 // number) filter by "contains" instead of a checklist.
 
-const DEFAULT_HIDDEN = ["Lost", "No Bid", "Cancelled", "Won"];
-const FILTER_KEY = "battag_col_filters_v1";
-// The status-only key this menu used to save under, read once so an existing
-// browser keeps the statuses it had chosen.
+// Decided bids pile up: Lost, Won, No Bid and Cancelled are most of the
+// history and almost never what you opened the dashboard to look at, so the
+// status column starts with everything else ticked.
+const DEFAULT_DECIDED = ["Lost", "No Bid", "Cancelled", "Won"];
+const FILTER_KEY = "battag_col_filters_v2";
+// Older keys, read once so an existing browser keeps what it had chosen. Both
+// stored the opposite of what is stored now — the values to leave out — so
+// loadFilters() inverts them.
+const LEGACY_HIDDEN_KEY = "battag_col_filters_v1";
 const LEGACY_STATUS_KEY = "battag_hidden_statuses_v2";
 
 // ---- Bucketing, for the columns that hold numbers and dates ----
@@ -1045,34 +1057,44 @@ const FILTER_COLUMNS = [
 
 const FILTER_BY_KEY = new Map(FILTER_COLUMNS.map((c) => [c.key, c]));
 
-// column key -> set of values the table leaves out
-const hiddenByColumn = new Map(FILTER_COLUMNS.map((c) => [c.key, new Set()]));
+// column key -> set of values the table shows. Empty = no filter on it.
+const selectedByColumn = new Map(FILTER_COLUMNS.map((c) => [c.key, new Set()]));
 // column key -> lower-cased substring, for the "contains" columns
 const textByColumn = new Map();
 // Columns the user has changed themselves. Defaults are only seeded into a
 // column until then, so re-opening the page doesn't undo a choice.
 const touchedColumns = new Set();
 
-function hiddenFor(key) {
-  return hiddenByColumn.get(key) || new Set();
+function selectedFor(key) {
+  return selectedByColumn.get(key) || new Set();
 }
 
-// Kept as a name of its own: the status set is what the funnel and the quick
-// filters reason about.
-const hiddenStatuses = hiddenFor("status");
+// Does this column let a value through? An empty selection lets everything
+// through, which is the difference between "no filter" and "show nothing".
+function columnAllows(key, value) {
+  const picked = selectedFor(key);
+  return picked.size === 0 || picked.has(value);
+}
+
+// column key -> values an older version of this menu had hidden, waiting to be
+// turned into a selection. Emptied by seedDefaults() as each column's values
+// become known.
+const pendingLegacy = new Map();
+
+function readJson(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "null");
+  } catch (e) {
+    console.error(`Could not read ${key}:`, e);
+    return null;
+  }
+}
 
 function loadFilters() {
-  let saved = null;
-  try {
-    saved = JSON.parse(localStorage.getItem(FILTER_KEY) || "null");
-  } catch (e) {
-    console.error("Could not read the saved filters:", e);
-  }
-
+  const saved = readJson(FILTER_KEY);
   if (saved) {
-    for (const [key, values] of Object.entries(saved.hidden || {})) {
-      // Filled in place: hiddenStatuses holds a reference to the status set.
-      const set = hiddenByColumn.get(key);
+    for (const [key, values] of Object.entries(saved.selected || {})) {
+      const set = selectedByColumn.get(key);
       if (set) for (const v of values) set.add(v);
     }
     for (const [key, q] of Object.entries(saved.text || {})) {
@@ -1082,48 +1104,100 @@ function loadFilters() {
     return;
   }
 
-  // First run under the new menu: carry over the old status-only choice.
-  try {
-    const legacy = localStorage.getItem(LEGACY_STATUS_KEY);
-    if (legacy) {
-      for (const s of JSON.parse(legacy)) hiddenStatuses.add(s);
-      touchedColumns.add("status");
-      return;
+  // Nothing saved under the current key. Both older shapes stored the opposite
+  // of what is stored now — the values to leave out — so they have to be
+  // inverted against the values the column actually holds, and none of those
+  // are known yet at load time. Stashed here and applied by seedDefaults()
+  // once the bids are in.
+  const old = readJson(LEGACY_HIDDEN_KEY);
+  if (old) {
+    for (const [key, values] of Object.entries(old.hidden || {})) {
+      if (selectedByColumn.has(key) && values.length) pendingLegacy.set(key, values);
     }
-  } catch (e) {
-    console.error("Could not read the saved statuses:", e);
+    // Text filters are already in the right shape.
+    for (const [key, q] of Object.entries(old.text || {})) {
+      if (q) textByColumn.set(key, q);
+    }
+    return;
   }
-  DEFAULT_HIDDEN.forEach((s) => hiddenStatuses.add(s));
+
+  const legacyStatuses = readJson(LEGACY_STATUS_KEY);
+  if (Array.isArray(legacyStatuses) && legacyStatuses.length) {
+    pendingLegacy.set("status", legacyStatuses);
+  }
+  // A browser that has never seen this menu gets the defaults, also seeded
+  // against the data once it arrives.
 }
 
 loadFilters();
 
 function saveFilters() {
   try {
-    const hidden = {};
-    for (const [key, set] of hiddenByColumn) if (set.size) hidden[key] = [...set];
+    const selected = {};
+    for (const [key, set] of selectedByColumn) if (set.size) selected[key] = [...set];
     const text = {};
     for (const [key, q] of textByColumn) if (q) text[key] = q;
     localStorage.setItem(
       FILTER_KEY,
-      JSON.stringify({ hidden, text, touched: [...touchedColumns] })
+      JSON.stringify({ selected, text, touched: [...touchedColumns] })
     );
   } catch (e) {
     console.error("Could not save the filters:", e);
   }
 }
 
-// Bids older than the recent window are loaded in the background for reports,
-// but left out of the table — they're history, and drawing them is what made
-// this page slow. Seeded on every load because the older years only appear in
-// the data once that background fetch lands; stops as soon as the user picks
-// years themselves.
-function seedYearFilter() {
-  if (touchedColumns.has("bidDue")) return;
-  const hidden = hiddenFor("bidDue");
-  for (const o of loadOpps()) {
-    const y = dueYearOf(o);
-    if (y !== "No date" && Number(y) < RECENT_YEAR_FROM) hidden.add(y);
+// The two filters that are on without anyone asking for them.
+//
+// Re-seeded on every data change rather than once, because both depend on
+// values that only exist after the bids land — the older years arrive with the
+// background fetch. Each stops the moment that column is touched, so a choice
+// is never undone.
+//
+// Because they are expressed as selections, a value that appears later is
+// handled by the same rules as it arrives: 2027 is >= RECENT_YEAR_FROM so it
+// selects itself, and a status added to FIELD_LISTS is not in DEFAULT_DECIDED
+// so it selects itself too. Neither quietly disappears from the table.
+function seedDefaults() {
+  // A column whose values came from an older, inverted save. Held back until
+  // its values are all known, or the inversion would select a short list and
+  // silently filter out everything missing from it — which for the year column
+  // means every bid the background fetch has not delivered yet.
+  for (const [key, excluded] of [...pendingLegacy]) {
+    const col = FILTER_BY_KEY.get(key);
+    if (!col) {
+      pendingLegacy.delete(key);
+      continue;
+    }
+    const ready = key === "bidDue" ? historyLoaded : loadOpps().length > 0;
+    if (!ready) continue;
+
+    const set = selectedFor(key);
+    const leaveOut = new Set(excluded);
+    for (const value of columnValues(col).values) {
+      if (!leaveOut.has(value)) set.add(value);
+    }
+    touchedColumns.add(key);
+    pendingLegacy.delete(key);
+    saveFilters();
+  }
+
+  if (!touchedColumns.has("bidDue") && !pendingLegacy.has("bidDue")) {
+    // Bids older than the recent window are still loaded, for the reports —
+    // they are just kept out of the table, because drawing all of them is what
+    // made this page slow to open.
+    const years = selectedFor("bidDue");
+    for (const o of loadOpps()) {
+      const y = dueYearOf(o);
+      if (y === "No date" || Number(y) >= RECENT_YEAR_FROM) years.add(y);
+    }
+  }
+
+  if (!touchedColumns.has("status") && !pendingLegacy.has("status")) {
+    const statuses = selectedFor("status");
+    const decided = new Set(DEFAULT_DECIDED);
+    for (const value of columnValues(FILTER_BY_KEY.get("status")).values) {
+      if (!decided.has(value)) statuses.add(value);
+    }
   }
 }
 
@@ -1143,9 +1217,9 @@ function columnValues(col) {
   for (const v of col.extra ? col.extra() : []) {
     if (!counts.has(v)) counts.set(v, 0);
   }
-  // A hidden value has to stay listed even if nothing carries it any more,
-  // or it could never be switched back on.
-  for (const v of hiddenFor(col.key)) if (!counts.has(v)) counts.set(v, 0);
+  // A selected value has to stay listed even if nothing carries it any more,
+  // or it could never be switched back off.
+  for (const v of selectedFor(col.key)) if (!counts.has(v)) counts.set(v, 0);
 
   let values = [...counts.keys()];
   if (col.options) {
@@ -1174,9 +1248,8 @@ function passesColumnFilters(o, skipDefaults, except) {
     if (col.type === "text") {
       const q = textByColumn.get(col.key);
       if (q && !String(col.value(o)).toLowerCase().includes(q)) return false;
-    } else {
-      const hidden = hiddenFor(col.key);
-      if (hidden.size && hidden.has(col.value(o))) return false;
+    } else if (!columnAllows(col.key, col.value(o))) {
+      return false;
     }
   }
   return true;
@@ -1186,7 +1259,7 @@ function passesColumnFilters(o, skipDefaults, except) {
 function activeFilterCount() {
   let n = 0;
   for (const col of FILTER_COLUMNS) {
-    if (col.type === "text" ? textByColumn.get(col.key) : hiddenFor(col.key).size) n++;
+    if (col.type === "text" ? textByColumn.get(col.key) : selectedFor(col.key).size) n++;
   }
   return n;
 }
@@ -1221,7 +1294,7 @@ function renderFilterMenu() {
     b.type = "button";
     b.className = "filter-col";
     b.classList.toggle("is-on", c.key === col.key);
-    const on = c.type === "text" ? !!textByColumn.get(c.key) : hiddenFor(c.key).size > 0;
+    const on = c.type === "text" ? !!textByColumn.get(c.key) : selectedFor(c.key).size > 0;
     b.classList.toggle("is-filtered", on);
     b.textContent = c.label;
     if (on) b.title = "Filtering";
@@ -1249,33 +1322,36 @@ function renderFilterMenu() {
   }
 
   // Every column gets both: one button for the column you are looking at, one
-  // for the lot. "Clear all" used to appear only when two columns were
-  // filtering, which meant the way out of a single stuck filter depended on
-  // there being a second one.
+  // for the lot. Each empties a selection rather than filling it, so after
+  // either of them nothing is ticked and nothing is filtered.
   const thisColumnFiltered =
-    col.type === "text" ? !!textByColumn.get(col.key) : hiddenFor(col.key).size > 0;
+    col.type === "text" ? !!textByColumn.get(col.key) : selectedFor(col.key).size > 0;
 
   const actions = document.createElement("div");
   actions.className = "status-menu-actions";
   const buttons = [
-    ["Show all", thisColumnFiltered, () => {
-      hiddenFor(col.key).clear();
+    ["Clear column", thisColumnFiltered, () => {
+      selectedFor(col.key).clear();
       textByColumn.delete(col.key);
     }],
   ];
   if (col.key === "status") {
-    // Back to the default view: exactly the decided statuses hidden, nothing
-    // else — so it doubles as a reset.
-    buttons.push(["Hide decided", true, () => {
-      hiddenStatuses.clear();
-      DEFAULT_HIDDEN.forEach((s) => hiddenStatuses.add(s));
+    // Back to the default view: everything except the decided statuses, which
+    // is what the table opens with — so it doubles as a reset.
+    buttons.push(["Active only", true, () => {
+      const statuses = selectedFor("status");
+      statuses.clear();
+      const decided = new Set(DEFAULT_DECIDED);
+      for (const value of columnValues(col).values) {
+        if (!decided.has(value)) statuses.add(value);
+      }
     }]);
   }
   buttons.push(["Clear all", activeFilterCount() > 0, () => {
-    for (const set of hiddenByColumn.values()) set.clear();
+    for (const set of selectedByColumn.values()) set.clear();
     textByColumn.clear();
     // Every column counts as chosen now, or the defaults would seed
-    // themselves straight back in.
+    // themselves straight back in on the next render.
     for (const c of FILTER_COLUMNS) touchedColumns.add(c.key);
   }]);
 
@@ -1337,7 +1413,16 @@ const LIST_SEARCH_AT = 12;
 
 function renderListFilter(menu, col) {
   const { values, counts } = columnValues(col);
-  const hidden = hiddenFor(col.key);
+  const picked = selectedFor(col.key);
+
+  // Nothing ticked is not "show nothing", it is "not filtering on this" — and
+  // that is easy to misread in a list of forty unticked boxes, so say it.
+  if (!picked.size) {
+    const note = document.createElement("p");
+    note.className = "filter-note";
+    note.textContent = "Not filtering — tick a value to narrow the list.";
+    menu.appendChild(note);
+  }
 
   const list = document.createElement("div");
   list.className = "filter-list";
@@ -1357,15 +1442,17 @@ function renderListFilter(menu, col) {
     for (const value of shown) {
       const row = document.createElement("label");
       row.className = "status-opt";
-      const on = !hidden.has(value);
-      row.classList.toggle("is-off", !on);
+      const on = picked.has(value);
+      // Dimmed only while something else is selected. With nothing selected
+      // every value is showing, so dimming the lot would be a lie.
+      row.classList.toggle("is-off", picked.size > 0 && !on);
 
       const cb = document.createElement("input");
       cb.type = "checkbox";
       cb.checked = on;
       cb.addEventListener("change", () => {
-        if (cb.checked) hidden.delete(value);
-        else hidden.add(value);
+        if (cb.checked) picked.add(value);
+        else picked.delete(value);
         touchColumn(col.key);
         render();
         renderFilterMenu();
@@ -1496,9 +1583,9 @@ function renderDivisionBar(pool) {
   for (const o of loadOpps()) seen.add(col.value(o));
   const all = divisionOrder(seen);
 
-  const hidden = hiddenFor("division");
-  const selected = new Set(all.filter((d) => !hidden.has(d)));
-  if (selected.size === all.length) selected.clear();
+  // The pills and the menu's Division checklist are the same set, so picking
+  // in one shows up in the other.
+  const selected = selectedFor("division");
 
   renderDivisionPills(host, {
     label: "Division",
@@ -1507,8 +1594,8 @@ function renderDivisionBar(pool) {
     selected,
     onPick: (division) => {
       const next = pickDivision(selected, all, division);
-      hidden.clear();
-      if (next.size) for (const d of all) if (!next.has(d)) hidden.add(d);
+      selected.clear();
+      for (const d of next) selected.add(d);
       touchColumn("division");
       render();
       updateFilterButton();
