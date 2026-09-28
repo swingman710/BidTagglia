@@ -4076,11 +4076,18 @@ oppForm.addEventListener("keydown", (e) => {
   e.preventDefault();
 });
 
-oppForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-
+// Saving is a button click rather than a form submit. Submitting the form is
+// what prompts the browser to offer to save the project address for autofill,
+// which it did on every single bid — and the handler only ever called
+// preventDefault anyway, so nothing about it needed to be a submit.
+function saveOppForm() {
+  const name = document.getElementById("f-name");
   if (!val("f-name")) {
-    document.getElementById("f-name").focus();
+    // The field is still required, but nothing submits the form any more, so
+    // ask for the browser's own message rather than silently moving the
+    // cursor.
+    name.focus();
+    name.reportValidity();
     return;
   }
 
@@ -4096,6 +4103,15 @@ oppForm.addEventListener("submit", (e) => {
   else addOpp(opp);
 
   closeModal();
+}
+
+document.getElementById("modal-submit").addEventListener("click", saveOppForm);
+
+// Belt and braces: nothing submits this form now, but if something ever does
+// — a stray button without type="button", say — it must not navigate.
+oppForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  saveOppForm();
 });
 
 for (const th of document.querySelectorAll(".bids thead th[data-sort]")) {

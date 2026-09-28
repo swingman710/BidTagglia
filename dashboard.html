@@ -589,6 +589,9 @@
           <h2 id="modal-title">New Opportunity</h2>
           <button class="modal-close" id="modal-close" title="Close">✕</button>
         </div>
+        <!-- Never actually submitted; see #modal-submit below. autocomplete and
+             the location fields' own autocomplete="off" keep the browser from
+             treating this as an address form. -->
         <form id="opp-form" class="opp-form" autocomplete="off">
           <!-- Section 1: General -->
           <fieldset class="form-section">
@@ -721,19 +724,19 @@
             <div class="section-grid">
               <div class="field full">
                 <label for="f-address">Project address</label>
-                <input type="text" id="f-address" />
+                <input type="text" id="f-address" autocomplete="off" />
               </div>
               <div class="field">
                 <label for="f-city">City</label>
-                <input type="text" id="f-city" />
+                <input type="text" id="f-city" autocomplete="off" />
               </div>
               <div class="field">
                 <label for="f-zip">Zip code</label>
-                <input type="text" id="f-zip" inputmode="numeric" />
+                <input type="text" id="f-zip" inputmode="numeric" autocomplete="off" />
               </div>
               <div class="field">
                 <label for="f-state">State</label>
-                <select id="f-state"></select>
+                <select id="f-state" autocomplete="off"></select>
               </div>
             </div>
           </fieldset>
@@ -792,7 +795,9 @@
               Delete bid
             </button>
             <button type="button" class="btn-ghost" id="modal-cancel">Cancel</button>
-            <button type="submit" class="btn-primary" id="modal-submit">Save opportunity</button>
+            <!-- type="button", not submit: a submitted form is what makes the
+                 browser offer to save the address for autofill. -->
+            <button type="button" class="btn-primary" id="modal-submit">Save opportunity</button>
           </div>
         </form>
       </div>
