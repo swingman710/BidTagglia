@@ -3446,6 +3446,15 @@ table.bids tbody tr.bid-row {
   margin-top: 14px;
 }
 
+/* .btn-primary is full-width by default, for the login form. In a flex row of
+   actions that made it swallow every pixel the Cancel button didn't — the same
+   override .modal-actions already carries. */
+.inline-form-actions .btn-primary {
+  width: auto;
+  margin-top: 0;
+  padding: 9px 20px;
+}
+
 /* ==========================================================================
    USERS VIEW (admin only)
    ========================================================================== */
@@ -4067,4 +4076,18 @@ tr.is-estimator td {
 .rep-toggle input:disabled {
   cursor: default;
   opacity: 0.4;
+}
+
+/* A line of explanation under an inline form's heading, for when the same
+   form does two different jobs. */
+.inline-form-hint {
+  margin: -4px 0 14px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  max-width: 62ch;
+}
+
+.inline-form-hint[hidden] {
+  display: none;
 }

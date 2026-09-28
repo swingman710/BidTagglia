@@ -26,6 +26,9 @@
   let members = [];
   let me = null; // this session's app_members row
   let seeded = false; // estimators pulled out of the bid history yet?
+  // The estimator row the add-user form is currently turning into a real
+  // account, if it is doing that rather than adding someone new.
+  let convertingId = null;
 
   const ESTIMATOR_PREFIX = "estimator:";
   const isEstimatorRow = (m) => m.source === "estimator";
@@ -197,6 +200,58 @@
     return true;
   }
 
+  // Turns an estimator row — a name off the bids, with no way in — into a real
+  // account, in place. Everything else about the row is kept: the same id, the
+  // same name, the same "On graphs" setting, and the bids that already name
+  // them are untouched because those match on the name.
+  //
+  // Done as an update rather than an insert on purpose. Adding a second row
+  // would leave the estimator row behind as a duplicate of the same person,
+  // and the next seed would treat the pair as normal.
+  async function activateMember(id, { email, name, role }) {
+    const identity = email.trim().toLowerCase();
+    const { error } = await sb
+      .from(TABLE)
+      .update({
+        identity,
+        email: identity,
+        name: name.trim() || null,
+        role,
+        source: "manual",
+        // An estimator row is blocked because it was never a login. It is one
+        // now.
+        blocked: false,
+        invited_at: new Date().toISOString(),
+        invited_by: me ? me.identity : null,
+      })
+      .eq("id", id);
+
+    if (error) {
+      // 23505 = unique violation on `identity`: this person already has an
+      // account, and what is left over is the estimator row itself.
+      if (error.code === "23505") {
+        const member = members.find((m) => m.id === id);
+        const who = (member && member.name) || "This estimator";
+        if (
+          confirm(
+            `${identity} is already on the list.\n\n` +
+            `${who} therefore already has a login. Remove the leftover ` +
+            "entry from the bid history?"
+          )
+        ) {
+          const { error: err } = await sb.from(TABLE).delete().eq("id", id);
+          if (err) toastError("Could not remove it: " + err.message);
+          else toastOk(`Removed the duplicate entry for ${who}`);
+          return true;
+        }
+        return false;
+      }
+      toastError("Could not activate this person: " + error.message);
+      return false;
+    }
+    return true;
+  }
+
   // ---------- Add-user form ----------
 
   function addFormFields() {
@@ -208,18 +263,34 @@
     };
   }
 
-  function showAddForm(show) {
+  // `member` present = turning that estimator row into a real account rather
+  // than adding somebody new.
+  function showAddForm(show, member) {
     const form = $("new-user-form");
     if (!form) return;
     form.hidden = !show;
     const f = addFormFields();
-    if (show) {
-      f.email.value = "";
-      f.name.value = "";
-      f.role.value = "User";
-      f.error.hidden = true;
-      f.email.focus();
+    convertingId = show && member ? member.id : null;
+
+    if (!show) return;
+
+    const who = member ? member.name || "this estimator" : null;
+    $("nu-form-title").textContent = member ? `Give ${who} a login` : "Add user";
+    const hint = $("nu-hint");
+    hint.hidden = !member;
+    if (member) {
+      hint.textContent =
+        `${who} already has bids in the system. Adding their address turns ` +
+        "this into a real account — their bid history, and whether they " +
+        "appear on the graphs, are unchanged.";
     }
+    $("nu-save").textContent = member ? "Activate" : "Add user";
+
+    f.email.value = member ? member.email || "" : "";
+    f.name.value = member ? member.name || "" : "";
+    f.role.value = member && MEMBER_ROLES.includes(member.role) ? member.role : "User";
+    f.error.hidden = true;
+    f.email.focus();
   }
 
   async function submitAddForm() {
@@ -243,7 +314,12 @@
       return;
     }
 
-    if (await addMember({ email, name: f.name.value, role: f.role.value })) {
+    const payload = { email, name: f.name.value, role: f.role.value };
+    const ok = convertingId
+      ? await activateMember(convertingId, payload)
+      : await addMember(payload);
+
+    if (ok) {
       toastOk(`${email} can now sign in`);
       showAddForm(false);
       await renderUsers();
@@ -267,6 +343,12 @@
     $("nu-email")?.addEventListener("keydown", (e) => {
       if (e.key === "Enter") submitAddForm();
     });
+  }
+
+  // The form is above the table, and the row that was clicked may be well down
+  // it — without this the button looks like it did nothing.
+  function scrollToForm() {
+    $("new-user-form")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
 
   // ---------- Users table ----------
@@ -393,18 +475,19 @@
         accessTd.appendChild(block);
       } else {
         // The useful action on an estimator row is turning it into a real
-        // account, which is the add form with the name already filled in.
-        const invite = document.createElement("button");
-        invite.type = "button";
-        invite.className = "btn-ghost sm";
-        invite.textContent = "Invite";
-        invite.title = "Give this person a login";
-        invite.addEventListener("click", () => {
-          showAddForm(true);
-          $("nu-name").value = m.name || "";
-          $("nu-email").focus();
+        // account, which takes nothing but an address.
+        const activate = document.createElement("button");
+        activate.type = "button";
+        activate.className = "btn-ghost sm";
+        activate.textContent = "Add email";
+        activate.title =
+          "Give this person a login. Their bids and their graph setting stay " +
+          "as they are.";
+        activate.addEventListener("click", () => {
+          showAddForm(true, m);
+          scrollToForm();
         });
-        accessTd.appendChild(invite);
+        accessTd.appendChild(activate);
       }
 
       const remove = document.createElement("button");

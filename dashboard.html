@@ -533,8 +533,11 @@
             <button id="new-user" class="btn-primary inline">+ Add user</button>
           </div>
 
-          <!-- Add-user form, revealed by the button above -->
+          <!-- Add-user form. Doubles as the "give this estimator a login" form,
+               which fills in the name and updates their existing row. -->
           <div class="inline-form" id="new-user-form" hidden>
+            <h3 id="nu-form-title">Add user</h3>
+            <p class="inline-form-hint" id="nu-hint" hidden></p>
             <div class="inline-form-grid">
               <label>Email address
                 <input type="email" id="nu-email" placeholder="name@battag.com"
