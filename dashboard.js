@@ -2605,13 +2605,45 @@ function updateReasonMsg() {
 // is typing a bid into the tracker it is already being worked.
 const DEFAULT_STATUS = "Bidding";
 
+// The signed-in person, spelled the way the bids already spell them.
+//
+// Sign-in hands back a display name from Entra, which need not match what the
+// estimator list uses — "Rossi, Tre" against "Tre Rossi", say. Writing the
+// Entra spelling straight onto a bid is how one person ends up as two
+// estimators on the Users tab and in every report, which is exactly the mess
+// the name merges had to clean up. So match it to a name already in use and
+// take that spelling; only fall back to the raw one if nothing matches.
+function currentEstimatorName() {
+  const raw = ((BBAccess.account && BBAccess.account.name) || "").trim();
+  if (!raw) return "";
+
+  const norm = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const want = norm(raw);
+  if (!want) return raw;
+
+  for (const name of FIELD_LISTS.leadEstimator) {
+    if (norm(name) === want) return name;
+  }
+  // Not on the configured list — someone may still have bids under it.
+  for (const o of loadOpps()) {
+    const name = (o.leadEstimator || "").trim();
+    if (name && norm(name) === want) return name;
+  }
+  return raw;
+}
+
 function buildForm(opp) {
   // Dropdowns
   fillSelect("f-division", FIELD_LISTS.division);
   fillSelect("f-status", FIELD_LISTS.opportunityStatus);
-  // A new bid starts at DEFAULT_STATUS rather than blank; an existing one is
-  // filled in by populateForm() straight after this.
-  if (!opp) document.getElementById("f-status").value = DEFAULT_STATUS;
+  // A new bid starts at DEFAULT_STATUS rather than blank, and with whoever is
+  // writing it down as the lead estimator — that is who it belongs to until
+  // somebody says otherwise. Both are editable; an existing bid is filled in
+  // by populateForm() straight after this.
+  if (!opp) {
+    document.getElementById("f-status").value = DEFAULT_STATUS;
+    document.getElementById("f-lead-estimator").value = currentEstimatorName();
+  }
   fillSelect("f-bid-type", FIELD_LISTS.bidType);
   fillSelect("f-delivery-method", FIELD_LISTS.deliveryMethod);
   fillSelect("f-state", STATES);
