@@ -1504,6 +1504,16 @@ textarea:focus {
   border-top: 1px solid var(--border);
 }
 
+.status-menu-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.status-menu-actions button:disabled:hover {
+  border-color: var(--border-2);
+  color: var(--muted);
+}
+
 .status-menu-actions button {
   flex: 1;
   /* Three buttons share a 320px menu — let them shrink rather than wrap the
@@ -3644,4 +3654,28 @@ table.bids tbody tr.bid-row {
 
 .filter-bar .filter-bar-clear {
   margin-left: auto;
+}
+
+/* A checkbox sitting in a panel heading ("Show inactive"). */
+.head-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.head-check input {
+  accent-color: var(--blue);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+/* An inactive contact stays readable but stops competing with the rest. */
+tr.is-inactive td {
+  opacity: 0.55;
 }

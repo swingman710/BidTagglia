@@ -1092,32 +1092,45 @@ function renderFilterMenu() {
     menu.appendChild(note);
   }
 
+  // Every column gets both: one button for the column you are looking at, one
+  // for the lot. "Clear all" used to appear only when two columns were
+  // filtering, which meant the way out of a single stuck filter depended on
+  // there being a second one.
+  const thisColumnFiltered =
+    col.type === "text" ? !!textByColumn.get(col.key) : hiddenFor(col.key).size > 0;
+
   const actions = document.createElement("div");
   actions.className = "status-menu-actions";
-  const buttons = [["Show all", () => {
-    hiddenFor(col.key).clear();
-    textByColumn.delete(col.key);
-  }]];
+  const buttons = [
+    ["Show all", thisColumnFiltered, () => {
+      hiddenFor(col.key).clear();
+      textByColumn.delete(col.key);
+    }],
+  ];
   if (col.key === "status") {
     // Back to the default view: exactly the decided statuses hidden, nothing
     // else — so it doubles as a reset.
-    buttons.push(["Hide decided", () => {
+    buttons.push(["Hide decided", true, () => {
       hiddenStatuses.clear();
       DEFAULT_HIDDEN.forEach((s) => hiddenStatuses.add(s));
     }]);
   }
-  if (activeFilterCount() > 1) {
-    buttons.push(["Clear all", () => {
-      for (const set of hiddenByColumn.values()) set.clear();
-      textByColumn.clear();
-      for (const c of FILTER_COLUMNS) touchedColumns.add(c.key);
-    }]);
-  }
-  for (const [label, fn] of buttons) {
+  buttons.push(["Clear all", activeFilterCount() > 0, () => {
+    for (const set of hiddenByColumn.values()) set.clear();
+    textByColumn.clear();
+    // Every column counts as chosen now, or the defaults would seed
+    // themselves straight back in.
+    for (const c of FILTER_COLUMNS) touchedColumns.add(c.key);
+  }]);
+
+  for (const [label, enabled, fn] of buttons) {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "btn-ghost sm";
     b.textContent = label;
+    // Left visible but dead when there is nothing for it to do, so the row of
+    // buttons doesn't change shape as you use it.
+    b.disabled = !enabled;
     b.addEventListener("click", () => {
       fn();
       touchColumn(col.key);
@@ -2161,14 +2174,16 @@ function updateReasonMsg() {
 
 // Where a bid starts: it's been received and not yet worked. Bidding is set
 // for you when the first price goes out (see updatePricingStatus).
-const DEFAULT_STATUS = "Pending";
+// Where a new bid starts. Bidding, not the first stage — by the time someone
+// is typing a bid into the tracker it is already being worked.
+const DEFAULT_STATUS = "Bidding";
 
 function buildForm(opp) {
   // Dropdowns
   fillSelect("f-division", FIELD_LISTS.division);
   fillSelect("f-status", FIELD_LISTS.opportunityStatus);
-  // A new bid starts at Pending rather than blank; an existing one is filled
-  // in by populateForm() straight after this.
+  // A new bid starts at DEFAULT_STATUS rather than blank; an existing one is
+  // filled in by populateForm() straight after this.
   if (!opp) document.getElementById("f-status").value = DEFAULT_STATUS;
   fillSelect("f-bid-type", FIELD_LISTS.bidType);
   fillSelect("f-delivery-method", FIELD_LISTS.deliveryMethod);

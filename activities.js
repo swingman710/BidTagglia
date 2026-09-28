@@ -123,7 +123,10 @@ const ACTIVITY_TYPES = [
     // Contacts may not have been loaded yet if this tab is opened first.
     if (window.BBContacts) {
       if (!BBContacts.list().length) await BBContacts.fetchContacts();
-      fillDatalist("dl-activity-contact", BBContacts.list().map(contactLabel));
+      // Only active people are offered for something new. An activity already
+      // against someone since made inactive still resolves, because
+      // contactByLabel() looks them up in the full list.
+      fillDatalist("dl-activity-contact", BBContacts.active().map(contactLabel));
     }
   }
 

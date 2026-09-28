@@ -16,6 +16,12 @@
 
   let contacts = [];
   let editingId = null;
+  // Inactive people are kept on file — they stay attached to the activities
+  // they're already on — but they're out of the way by default.
+  let showInactive = false;
+
+  // Rows written before the `active` column existed come back without it.
+  const isActiveContact = (c) => c.active !== false;
 
   // ---------- Data ----------
 
@@ -37,6 +43,16 @@
       return false;
     }
     return true;
+  }
+
+  async function setActive(contact, active) {
+    const { error } = await sb.from(TABLE).update({ active }).eq("id", contact.id);
+    if (error) {
+      toastError("Could not change status: " + error.message);
+      return;
+    }
+    await renderContacts();
+    toastOk(`${contact.name} marked ${active ? "active" : "inactive"}`);
   }
 
   async function deleteContact(contact) {
@@ -125,12 +141,20 @@
     if (!tbody) return;
     await fetchContacts();
 
-    $("contact-count").textContent = contacts.length;
-    $("contact-empty").style.display = contacts.length ? "none" : "block";
+    const shown = showInactive ? contacts : contacts.filter(isActiveContact);
+    const hidden = contacts.length - shown.length;
+
+    $("contact-count").textContent = shown.length;
+    $("contact-empty").style.display = shown.length ? "none" : "block";
+    $("contact-empty").textContent = contacts.length
+      ? `No active contacts — ${hidden} inactive. Tick "Show inactive" to see them.`
+      : "No contacts yet — add one above.";
     tbody.innerHTML = "";
 
-    for (const c of contacts) {
+    for (const c of shown) {
+      const active = isActiveContact(c);
       const tr = document.createElement("tr");
+      if (!active) tr.className = "is-inactive";
 
       const name = document.createElement("td");
       name.textContent = c.name;
@@ -151,6 +175,12 @@
       const company = document.createElement("td");
       company.textContent = c.company || "—";
 
+      const state = document.createElement("td");
+      const pill = document.createElement("span");
+      pill.className = `status ${active ? "won" : "lost"}`;
+      pill.textContent = active ? "Active" : "Inactive";
+      state.appendChild(pill);
+
       const actions = document.createElement("td");
       actions.className = "col-status";
       const edit = document.createElement("button");
@@ -158,20 +188,32 @@
       edit.className = "btn-ghost sm";
       edit.textContent = "Edit";
       edit.addEventListener("click", () => showForm(true, c));
+      const flip = document.createElement("button");
+      flip.type = "button";
+      flip.className = "btn-ghost sm";
+      flip.textContent = active ? "Deactivate" : "Reactivate";
+      flip.title = active
+        ? "Keep them on file but out of the list and the pickers"
+        : "Put them back in the list and the pickers";
+      flip.addEventListener("click", () => setActive(c, !active));
       const del = document.createElement("button");
       del.type = "button";
       del.className = "btn-ghost sm danger";
       del.textContent = "Delete";
       del.addEventListener("click", () => deleteContact(c));
-      actions.append(edit, del);
+      actions.append(edit, flip, del);
 
-      tr.append(name, email, phone, company, actions);
+      tr.append(name, email, phone, company, state, actions);
       tbody.appendChild(tr);
     }
   }
 
   // ---------- Boot ----------
 
+  $("ct-show-inactive")?.addEventListener("change", (e) => {
+    showInactive = e.target.checked;
+    renderContacts();
+  });
   $("new-contact")?.addEventListener("click", () => showForm(true));
   $("ct-cancel")?.addEventListener("click", () => showForm(false));
   $("ct-save")?.addEventListener("click", submitForm);
@@ -181,7 +223,12 @@
   window.BBContacts = {
     fetchContacts,
     renderContacts,
+    // Everyone on file. byId() has to see inactive people too — they stay
+    // named on the activities they were already attached to.
     list: () => contacts,
+    // Just the people worth offering in a picker for something new.
+    active: () => contacts.filter(isActiveContact),
+    isActive: isActiveContact,
     byId: (id) => contacts.find((c) => String(c.id) === String(id)) || null,
   };
 })();
