@@ -335,9 +335,22 @@
       if (!isWon(o) && !isLost(o)) continue;
       const names = dimValues(dim, o);
       for (const name of names.length ? names : ["(none)"]) {
+        // For every dimension but one, the bid's own status is the outcome.
+        // "Company Bid To" is different: several companies are priced on one
+        // bid and only one of them can win it, so a bid we won is a loss for
+        // everyone whose proposal wasn't the winning one. See
+        // outcomeForCompany() in dashboard.js.
+        const outcome =
+          dim.key === "company"
+            ? outcomeForCompany(o, companyKey(name))
+            : isWon(o)
+              ? "Won"
+              : "Lost";
+        if (!outcome) continue;
+
         const g = bucket(name);
         g.bids++;
-        if (isWon(o)) {
+        if (outcome === "Won") {
           g.won++;
           g.wonValue += repAmount(o);
         } else {

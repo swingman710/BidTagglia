@@ -840,6 +840,13 @@
         <div class="company-form">
           <!-- Win/loss with this company, filled by companies.js -->
           <div id="company-record"></div>
+          <div class="field">
+            <label for="c-name">Company name</label>
+            <input type="text" id="c-name" list="dl-company-names" autocomplete="off" />
+            <!-- Warns about renaming onto a name already in use, and about how
+                 many records a rename will carry with it. -->
+            <p class="field-note" id="c-name-note" hidden></p>
+          </div>
           <div class="section-grid">
             <div class="field">
               <label>Type</label>
@@ -866,6 +873,7 @@
           </div>
         </div>
         <div class="modal-actions">
+          <button type="button" class="btn-danger" id="company-delete">Delete</button>
           <button type="button" class="btn-ghost" id="company-cancel">Cancel</button>
           <button type="button" class="btn-primary" id="company-save">Save company</button>
         </div>
@@ -874,6 +882,8 @@
 
     <!-- Companies already bid to, for the pricing form -->
     <datalist id="dl-quote-company"></datalist>
+    <!-- Every known company, for the rename/merge field -->
+    <datalist id="dl-company-names"></datalist>
 
     <!-- Contacts + activities pickers -->
     <datalist id="dl-contact-company"></datalist>

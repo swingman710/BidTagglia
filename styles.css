@@ -3817,3 +3817,25 @@ tr.is-inactive td {
   font-size: 12px;
   color: var(--muted);
 }
+
+/* The winning proposal, in a list of several. */
+tr.quote-won td {
+  background: var(--green-soft, var(--band));
+}
+
+tr.quote-won .quote-company {
+  font-weight: 700;
+}
+
+/* Won is the one chevron that decides the bid, so it reads as an outcome
+   rather than as the next step along. */
+.status-steps .chev.win.is-active {
+  background: var(--green, #16a34a);
+  border-color: var(--green, #16a34a);
+  color: #fff;
+}
+
+.status-steps .chev.win:not(.is-active):hover {
+  border-color: var(--green, #16a34a);
+  color: var(--green, #16a34a);
+}

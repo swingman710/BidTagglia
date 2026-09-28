@@ -158,6 +158,13 @@ let quotesCache = [];
 // the Project Value column; see oppValue().
 const proposalPrices = new Map();
 
+// opportunity id (as text) -> company key of the proposal marked Won, when one
+// has been. Several companies get priced on one bid and only one of them wins
+// it, so the winner is recorded on the quote rather than only on the bid.
+// Nothing here for the imported history, which predates the idea — see
+// outcomeForCompany().
+const quoteWinners = new Map();
+
 // ---------- Company names ----------
 // Companies are typed by hand in the quote form, so "Turner", "turner " and
 // "Turner  " are the same company. Everything that lists or groups companies
@@ -341,6 +348,8 @@ function setHistoryNote(text) {
   note.hidden = !text;
 }
 
+let historyPromise = null; // in-flight load, so callers can share one
+
 async function runHistoryLoad() {
   setHistoryNote(`loading ${RECENT_YEAR_FROM - 1} and earlier…`);
   const ok = await fetchHistory();
@@ -352,19 +361,32 @@ function scheduleHistoryLoad() {
   if (historyLoaded || historyTimer) return;
   historyTimer = setTimeout(() => {
     historyTimer = null;
-    runHistoryLoad();
+    ensureHistory();
   }, HISTORY_DELAY);
+}
+
+// Resolves once every year is in memory, starting the load if it hasn't begun.
+// Anything that edits across the whole history — renaming a company, say — has
+// to wait on this first, or it will quietly miss every bid before
+// RECENT_YEAR_FROM.
+function ensureHistory() {
+  if (historyLoaded) return Promise.resolve();
+  if (historyTimer) {
+    clearTimeout(historyTimer);
+    historyTimer = null;
+  }
+  if (!historyPromise) {
+    historyPromise = runHistoryLoad().finally(() => {
+      historyPromise = null;
+    });
+  }
+  return historyPromise;
 }
 
 // Reports are meant to cover every year, so opening one of those tabs spends
 // the rest of the cooldown rather than reporting on a partial history.
 function loadHistoryNow() {
-  if (historyLoaded) return;
-  if (historyTimer) {
-    clearTimeout(historyTimer);
-    historyTimer = null;
-    runHistoryLoad();
-  }
+  ensureHistory();
 }
 
 // A bid that moves out of the recent window is in neither read's results any
@@ -408,9 +430,14 @@ async function fetchQuotes() {
 
   const stamps = new Map(); // opp id -> stamp of the quote we kept
   proposalPrices.clear();
+  quoteWinners.clear();
   for (const q of quotesCache) {
     rememberCompany(q.company);
     if (q.type !== "proposal") continue;
+    if (q.status === "Won") {
+      const winner = companyKey(canonicalCompany(q.company));
+      if (winner) quoteWinners.set(String(q.opportunity_id), winner);
+    }
     if (q.price == null || q.price === "") continue;
     const key = String(q.opportunity_id);
     const stamp = q.price_sent_on || q.created_at || "";
@@ -3070,6 +3097,64 @@ function printBid(o) {
   );
 }
 
+// ---------- Who a bid was won or lost for ----------
+// A bid has two different kinds of company on it. The ones we priced — every
+// company on a proposal quote — are competing with each other: only one of
+// them can win the job. The ones named on the bid itself (the CM/GC, the
+// owner, the architect, the engineer) are not competing at all; if the job is
+// won, it is won with all of them.
+//
+// So "did this company win this bid" is not simply the bid's status.
+
+const COMPANY_BID_FIELDS = ["cm", "ownerCustomer", "architect", "engineer"];
+
+// The companies named on the bid itself, as canonical keys.
+function companiesOnBid(o) {
+  const keys = new Set();
+  for (const field of COMPANY_BID_FIELDS) {
+    const value = o[field];
+    const names = Array.isArray(value) ? value : [value];
+    for (const name of names) {
+      const key = companyKey(canonicalCompany(name));
+      if (key) keys.add(key);
+    }
+  }
+  return keys;
+}
+
+// "Won" | "Lost" | null (still undecided) — for one company on one bid.
+function outcomeForCompany(o, key) {
+  if (o.status === "Lost") return "Lost";
+  if (o.status !== "Won") return null;
+
+  const winner = quoteWinners.get(String(o.id));
+  // Nothing marked on any quote — every bid imported from the old tracker is
+  // in this state, and the whole history would otherwise read as zero wins.
+  // Fall back to the bid's own status, which is what this used to do.
+  if (!winner) return "Won";
+
+  if (winner === key) return "Won";
+  // Someone else's proposal took it. A company we merely priced to did not win
+  // the job; a company attached to the bid itself still did.
+  return companiesOnBid(o).has(key) ? "Won" : "Lost";
+}
+
+// Every bid a company is attached to at all — priced to, or named on the bid.
+function bidsForCompany(name) {
+  const key = companyKey(canonicalCompany(name));
+  if (!key) return [];
+
+  const quoted = new Set();
+  for (const q of quotesCache) {
+    if (companyKey(canonicalCompany(q.company)) === key) {
+      quoted.add(String(q.opportunity_id));
+    }
+  }
+  return loadOpps().filter(
+    (o) => quoted.has(String(o.id)) || companiesOnBid(o).has(key)
+  );
+}
+
 // ---------- Track record ----------
 // Win/loss history against whoever this bid involves, shown on the bid itself.
 // Reports can already work this out, but the useful moment is while you are
@@ -3294,12 +3379,17 @@ async function addPricing(row) {
 }
 
 // Statuses a bid can be moved on from automatically: the stages that come
-// before Bidding. Anywhere later — Pending, Won, Lost, on hold — someone has
-// made a decision the app shouldn't overrule, and moving it would be a step
+// before Pending. Anywhere later — Won, Lost, on hold — someone has made a
+// decision the app shouldn't overrule, and moving it would be a step
 // backwards anyway.
-const AUTO_ADVANCE_FROM = new Set(["Future Opportunity", "Budgeting"]);
+const AUTO_ADVANCE_FROM = new Set([
+  "Future Opportunity", "Budgeting", "Bidding",
+]);
 
 async function updatePricingStatus(id, status) {
+  // Won is not just a status on one quote — it decides the bid.
+  if (status === "Won") return setQuoteWon(id);
+
   const { error } = await sb.from(PRICING_TABLE).update({ status }).eq("id", id);
   if (error) {
     toastError("Could not update status: " + error.message);
@@ -3307,16 +3397,72 @@ async function updatePricingStatus(id, status) {
   }
   renderPricing();
 
-  // Sending a price is the moment a bid becomes a live bid, so move it on —
-  // but only from a status that hasn't been decided yet, and say so, since
-  // changing something the person didn't ask to change needs to be visible.
+  // A price out of the door is the moment the bid is waiting on someone else,
+  // so move it on — but only from a stage that hasn't been decided yet, and
+  // say so, since changing something the person didn't ask to change needs to
+  // be visible.
   if (status === "Sent" && detailOpp && AUTO_ADVANCE_FROM.has(detailOpp.status)) {
     const previous = detailOpp.status;
-    await setOppStatus(detailOpp, "Bidding");
-    if (detailOpp.status === "Bidding") {
-      toast(`Price sent — moved this bid from ${previous} to Bidding`);
+    await setOppStatus(detailOpp, "Pending");
+    if (detailOpp.status === "Pending") {
+      toast(`Price sent — moved this bid from ${previous} to Pending`);
     }
   }
+}
+
+// Marking a proposal Won is the one place the whole bid is decided:
+//   * that quote becomes Won
+//   * every other proposal on the bid becomes Lost — only one can win it
+//   * the bid itself becomes Won
+// Budgetary quotes are left alone; they aren't competing for the job.
+async function setQuoteWon(id) {
+  const quote = quotesCache.find((q) => String(q.id) === String(id));
+  if (!quote) return;
+  const oppId = String(quote.opportunity_id);
+
+  const { error } = await sb
+    .from(PRICING_TABLE)
+    .update({ status: "Won" })
+    .eq("id", id);
+  if (error) {
+    toastError("Could not mark this price won: " + error.message);
+    return;
+  }
+
+  // Every other proposal on this bid lost it. Done one by one rather than in
+  // a single .neq() so a quote already marked Withdrawn is left as it is —
+  // withdrawn is a different thing from lost.
+  const alsoRan = quotesCache.filter(
+    (q) =>
+      String(q.opportunity_id) === oppId &&
+      String(q.id) !== String(id) &&
+      q.type === "proposal" &&
+      q.status !== "Withdrawn"
+  );
+  for (const other of alsoRan) {
+    const { error: err } = await sb
+      .from(PRICING_TABLE)
+      .update({ status: "Lost" })
+      .eq("id", other.id);
+    if (err) console.error("Could not mark a losing quote:", err.message);
+  }
+
+  // The prices and the winner lookup both come out of the quotes.
+  pricingDirty = true;
+  await fetchQuotes();
+  renderPricing();
+
+  if (detailOpp && String(detailOpp.id) === oppId && detailOpp.status !== "Won") {
+    await setOppStatus(detailOpp, "Won");
+  }
+
+  const who = canonicalCompany(quote.company) || "This price";
+  toastOk(
+    alsoRan.length
+      ? `${who} won — the other ${alsoRan.length} ` +
+        `proposal${alsoRan.length === 1 ? "" : "s"} marked lost`
+      : `${who} won`
+  );
 }
 
 async function updatePricing(id, patch) {
@@ -3363,7 +3509,7 @@ async function deletePricing(id) {
   });
 }
 
-const QUOTE_STATUSES = ["Draft", "Sent", "Lost", "Withdrawn"];
+const QUOTE_STATUSES = ["Draft", "Sent", "Won", "Lost", "Withdrawn"];
 
 // Where the add/edit quote form is mounted in the Pricing tab (set by
 // renderPricing, read by each row's Edit button).
@@ -3371,6 +3517,7 @@ let quoteFormMount = null;
 
 function renderQuoteRow(q) {
   const tr = document.createElement("tr");
+  if (q.status === "Won") tr.className = "quote-won";
 
   const company = document.createElement("td");
   company.className = "quote-company";
@@ -3419,14 +3566,22 @@ function renderQuoteRow(q) {
   del.addEventListener("click", () => deletePricing(q.id));
   actions.appendChild(del);
 
-  // Bottom: Draft -> Sent chevrons
+  // Bottom: Draft -> Sent -> Won chevrons. Only a proposal can be Won —
+  // a budgetary number isn't competing for the job.
   const steps = document.createElement("div");
   steps.className = "status-steps";
-  for (const s of ["Draft", "Sent"]) {
+  const stages = q.type === "proposal" ? ["Draft", "Sent", "Won"] : ["Draft", "Sent"];
+  for (const s of stages) {
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "chev" + (q.status === s ? " is-active" : "");
+    b.className =
+      "chev" + (q.status === s ? " is-active" : "") + (s === "Won" ? " win" : "");
     b.textContent = s;
+    if (s === "Won") {
+      b.title =
+        "Mark this company as the winner: every other proposal on this bid " +
+        "is marked lost and the bid moves to Won.";
+    }
     b.addEventListener("click", () => updatePricingStatus(q.id, s));
     steps.appendChild(b);
   }

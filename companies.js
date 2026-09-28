@@ -2,10 +2,15 @@
 //  Companies tab — every company we've bid to, plus the details we keep on
 //  them (type, industry, phone, website, notes).
 //
-//  The list is the union of company names on pricing quotes and rows already
-//  saved here, deduped through dashboard.js's company registry so a name shows
-//  up once however it was typed on each quote. Table: public.companies (see
-//  supabase_companies.sql).
+//  The list is the union of company names on pricing quotes, names on the bids
+//  themselves (CM/GC, owner, architect, engineer) and rows already saved here,
+//  deduped through dashboard.js's company registry so a name shows up once
+//  however it was typed. Table: public.companies (see supabase_companies.sql).
+//
+//  A company's name is editable. Because the name IS the link — quotes,
+//  contacts and bids all store it as text, not as an id — renaming has to
+//  carry every one of those references with it. renameCompany() does that, and
+//  renaming onto a name already in use is a merge. See its comment.
 // ===========================================================================
 
 const COMPANY_TYPES = [
@@ -27,6 +32,10 @@ const COMPANY_INDUSTRIES = [
   let saved = new Map(); // company key -> row in public.companies
   let editingName = null;
   let query = "";
+  // What the open company is referenced by. Worked out once when the modal
+  // opens rather than on every keystroke in the name field — it is a scan of
+  // every quote and every bid.
+  let openRefs = null;
 
   // ---------- Data ----------
 
@@ -67,18 +76,183 @@ const COMPANY_INDUSTRIES = [
     return [];
   }
 
-  // How many bids we've priced to each company.
-  function bidCounts() {
-    const counts = new Map();
+  // Every bid each company touches, priced to or named on. Built in one pass
+  // over the quotes and the bids — asking per company would be a scan of every
+  // bid for each of 1,400 companies.
+  function bidIndex() {
+    const index = new Map(); // company key -> Set(opportunity id)
+    const add = (key, oppId) => {
+      if (!key) return;
+      const bids = index.get(key);
+      if (bids) bids.add(oppId);
+      else index.set(key, new Set([oppId]));
+    };
     for (const q of quotesCache) {
-      const name = canonicalCompany(q.company);
-      if (!name) continue;
-      const key = companyKey(name);
-      const bids = counts.get(key) || new Set();
-      bids.add(String(q.opportunity_id));
-      counts.set(key, bids);
+      add(companyKey(canonicalCompany(q.company)), String(q.opportunity_id));
     }
-    return counts;
+    for (const o of loadOpps()) {
+      for (const key of companiesOnBid(o)) add(key, String(o.id));
+    }
+    return index;
+  }
+
+  // ---------- Renaming, merging and deleting ----------
+  // The company name IS the link: quotes, contacts and the bids themselves all
+  // store it as text rather than as an id. So renaming has to rewrite every
+  // one of those references, or the old name simply reappears in the list the
+  // next time it is read back.
+  //
+  // Renaming onto a name that already exists is therefore the same operation
+  // as a merge, and is treated as one: both sets of references end up pointing
+  // at the surviving name, and the leftover directory row is removed.
+
+  // Postgrest puts the id list in the URL, so send it in chunks rather than
+  // one request naming three thousand rows.
+  const ID_CHUNK = 200;
+
+  async function updateByIds(table, ids, patch) {
+    for (let i = 0; i < ids.length; i += ID_CHUNK) {
+      const { error } = await sb
+        .from(table)
+        .update(patch)
+        .in("id", ids.slice(i, i + ID_CHUNK));
+      if (error) {
+        toastError(`Could not update ${table}: ${error.message}`);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  const sameCompany = (value, key) => companyKey(canonicalCompany(value)) === key;
+
+  // What a rename is about to touch, so the person can be told before it runs.
+  function referencesTo(key) {
+    const quotes = quotesCache.filter((q) => sameCompany(q.company, key));
+    const contacts = (window.BBContacts ? BBContacts.list() : []).filter((c) =>
+      sameCompany(c.company, key)
+    );
+    const bids = loadOpps().filter((o) => companiesOnBid(o).has(key));
+    return { quotes, contacts, bids, total: quotes.length + contacts.length + bids.length };
+  }
+
+  async function renameCompany(oldName, newName) {
+    // Every reference has to be visible to be rewritten, and the older years
+    // arrive in the background.
+    await ensureHistory();
+
+    const oldKey = companyKey(oldName);
+    const newKey = companyKey(newName);
+    if (!oldKey || !newKey) return false;
+
+    const refs = referencesTo(oldKey);
+    const merging = newKey !== oldKey && saved.has(newKey);
+
+    if (refs.quotes.length) {
+      const ids = refs.quotes.map((q) => q.id);
+      if (!(await updateByIds(PRICING_TABLE, ids, { company: newName })) ) return false;
+    }
+
+    if (refs.contacts.length) {
+      const ids = refs.contacts.map((c) => c.id);
+      if (!(await updateByIds("contacts", ids, { company: newName }))) return false;
+    }
+
+    // The three single-value columns can go a field at a time. cm is a text[]
+    // and every row's array is different, so those go one by one — but only
+    // the handful of bids that actually name this company.
+    for (const [field, column] of [
+      ["ownerCustomer", "owner_customer"],
+      ["architect", "architect"],
+      ["engineer", "engineer"],
+    ]) {
+      const ids = refs.bids
+        .filter((o) => sameCompany(o[field], oldKey))
+        .map((o) => o.id);
+      if (ids.length && !(await updateByIds(SUPABASE_TABLE, ids, { [column]: newName }))) {
+        return false;
+      }
+    }
+
+    for (const o of refs.bids) {
+      if (!Array.isArray(o.cm) || !o.cm.some((x) => sameCompany(x, oldKey))) continue;
+      // Replace this company wherever it appears, then drop any duplicate the
+      // merge just created — a bid naming both companies must not end up
+      // naming the survivor twice.
+      const next = [];
+      for (const entry of o.cm) {
+        const value = sameCompany(entry, oldKey) ? newName : entry;
+        if (!next.some((x) => companyKey(x) === companyKey(value))) next.push(value);
+      }
+      const { error } = await sb
+        .from(SUPABASE_TABLE)
+        .update({ cm: next })
+        .eq("id", o.id);
+      if (error) {
+        toastError("Could not update a bid: " + error.message);
+        return false;
+      }
+    }
+
+    // Finally the directory row itself.
+    const oldRow = saved.get(oldKey);
+    if (merging) {
+      // The surviving row keeps its own details; the old one goes.
+      if (oldRow) {
+        const { error } = await sb.from(TABLE).delete().eq("id", oldRow.id);
+        if (error) {
+          toastError("Could not merge the companies: " + error.message);
+          return false;
+        }
+      }
+    } else if (oldRow) {
+      const { error } = await sb
+        .from(TABLE)
+        .update({ name: newName, updated_at: new Date().toISOString() })
+        .eq("id", oldRow.id);
+      if (error) {
+        toastError("Could not rename the company: " + error.message);
+        return false;
+      }
+    }
+
+    // companyDisplay still holds the old spelling, and the caches still hold
+    // the old text, so everything has to be read back.
+    await refreshOpps();
+    await fetchCompanies();
+    if (window.BBContacts) await BBContacts.fetchContacts();
+    return { merging, refs };
+  }
+
+  // Removes the saved details. Anything still naming the company keeps naming
+  // it, so the name stays in the list — say so rather than appear to fail.
+  async function deleteCompany(name) {
+    const key = companyKey(name);
+    const row = saved.get(key);
+    const refs = openRefs || referencesTo(key);
+
+    const used = refs.total
+      ? `\n\n${canonicalCompany(name)} is still named on ${refs.bids.length} bid(s), ` +
+        `${refs.quotes.length} quote(s) and ${refs.contacts.length} contact(s). ` +
+        "Those are not touched, so the name will stay in the list — only the " +
+        "type, industry, phone, website and notes are removed.\n\n" +
+        "To get rid of the name itself, rename it onto the company it " +
+        "duplicates instead, which merges the two."
+      : "";
+
+    if (!confirm(`Delete ${canonicalCompany(name)}?${used}`)) return;
+
+    if (row) {
+      const { error } = await sb.from(TABLE).delete().eq("id", row.id);
+      if (error) {
+        toastError("Could not delete the company: " + error.message);
+        return;
+      }
+    }
+    closeCompany();
+    toastOk(`Deleted ${canonicalCompany(name)}`);
+    await fetchCompanies();
+    await renderCompanies();
   }
 
   // ---------- Sorting ----------
@@ -129,7 +303,7 @@ const COMPANY_INDUSTRIES = [
     if (!tbody) return;
     await fetchCompanies();
 
-    const counts = bidCounts();
+    const counts = bidIndex();
     const rows = knownCompanies().map((name) => {
       const key = companyKey(name);
       const row = saved.get(key) || {};
@@ -234,17 +408,16 @@ const COMPANY_INDUSTRIES = [
     mount.innerHTML = "";
 
     const key = companyKey(name);
-    // Bids this company was priced on, found through their quotes.
-    const oppIds = new Set(
-      quotesCache
-        .filter((q) => companyKey(canonicalCompany(q.company)) === key)
-        .map((q) => String(q.opportunity_id))
-    );
-    const bids = loadOpps().filter((o) => oppIds.has(String(o.id)));
+    // Every bid they're attached to: priced to, or named on the bid as the
+    // CM/GC, owner, architect or engineer.
+    const bids = bidsForCompany(name);
     if (!bids.length) return;
 
-    const won = bids.filter((o) => o.status === "Won");
-    const lost = bids.filter((o) => o.status === "Lost");
+    // Won/lost for THEM, which is not the same as the bid's own status: when
+    // one proposal is marked Won, the companies on the other proposals lost
+    // it, while the CM, owner and the rest won it alongside us.
+    const won = bids.filter((o) => outcomeForCompany(o, key) === "Won");
+    const lost = bids.filter((o) => outcomeForCompany(o, key) === "Lost");
     const decided = won.length + lost.length;
     const value = (list) =>
       list.reduce(
@@ -336,11 +509,50 @@ const COMPANY_INDUSTRIES = [
     mount.appendChild(sec);
   }
 
+  // Warns before a rename lands: what it will carry with it, and whether the
+  // typed name is really a merge into a company that already exists.
+  function updateNameNote() {
+    const note = $("c-name-note");
+    const input = $("c-name");
+    if (!note || !input || !editingName) return;
+
+    const typed = input.value.trim();
+    const oldKey = companyKey(editingName);
+    const newKey = companyKey(typed);
+    if (!typed || newKey === oldKey) {
+      note.hidden = true;
+      return;
+    }
+
+    const refs = openRefs || referencesTo(oldKey);
+    const merging = knownCompanies().some((n) => companyKey(n) === newKey);
+    const carries = refs.total
+      ? ` ${refs.total} record${refs.total === 1 ? "" : "s"} will be repointed ` +
+        `(${refs.bids.length} bid, ${refs.quotes.length} quote, ` +
+        `${refs.contacts.length} contact).`
+      : "";
+
+    note.textContent = merging
+      ? `${canonicalCompany(typed)} already exists — saving will MERGE the two.${carries}`
+      : `Renaming ${editingName} to ${typed}.${carries}`;
+    note.className = `field-note${merging ? " warn" : ""}`;
+    note.hidden = false;
+  }
+
   function openCompany(name) {
     const row = saved.get(companyKey(name)) || {};
     editingName = name;
 
+    openRefs = referencesTo(companyKey(name));
     $("company-title").textContent = name;
+    $("c-name").value = name;
+    $("c-name-note").hidden = true;
+    // Every other company, so renaming onto one of them is a pick rather than
+    // a retype — which is what makes the merge discoverable.
+    fillDatalist(
+      "dl-company-names",
+      knownCompanies().filter((n) => companyKey(n) !== companyKey(name))
+    );
     renderCompanyRecord(name);
     // Every type seen in the data, so an imported value that isn't on the
     // standard list is still selectable rather than silently dropped.
@@ -362,21 +574,69 @@ const COMPANY_INDUSTRIES = [
   function closeCompany() {
     $("company-modal").hidden = true;
     editingName = null;
+    openRefs = null;
   }
 
   async function saveOpenCompany() {
     if (!editingName) return;
     const editing = editingName; // closeCompany() clears it before the toast
-    const ok = await saveCompany(editingName, {
+    const typed = $("c-name").value.trim();
+
+    if (!typed) {
+      toastError("A company needs a name.");
+      $("c-name").focus();
+      return;
+    }
+
+    const renaming = companyKey(typed) !== companyKey(editing);
+    const merging =
+      renaming && knownCompanies().some((n) => companyKey(n) === companyKey(typed));
+
+    if (merging &&
+        !confirm(
+          `${canonicalCompany(typed)} already exists.\n\n` +
+          `Saving will merge ${editing} into it: every bid, quote and contact ` +
+          `naming ${editing} will name ${canonicalCompany(typed)} instead, and ` +
+          `${editing} will stop existing.\n\nThis cannot be undone.`
+        )) {
+      return;
+    }
+
+    // Details are written under the name that will survive.
+    const target = renaming ? typed : editing;
+    const details = {
       type: $("mc-c-type")._getSelected(),
       industry: $("c-industry").value || null,
       phone: $("c-phone").value.trim() || null,
       website: $("c-website").value.trim() || null,
       notes: $("c-notes").value.trim() || null,
-    });
-    if (!ok) return;
-    closeCompany();
-    toastOk(`Saved ${editing}`);
+    };
+
+    const save = $("company-save");
+    save.disabled = true;
+    save.textContent = renaming ? "Renaming…" : "Saving…";
+    try {
+      if (renaming) {
+        const result = await renameCompany(editing, typed);
+        if (!result) return;
+        // The merge target may not have had a row of its own yet.
+        rememberCompany(typed);
+        if (!(await saveCompany(target, details))) return;
+        closeCompany();
+        toastOk(
+          result.merging
+            ? `Merged ${editing} into ${canonicalCompany(typed)}`
+            : `Renamed ${editing} to ${canonicalCompany(typed)}`
+        );
+      } else {
+        if (!(await saveCompany(target, details))) return;
+        closeCompany();
+        toastOk(`Saved ${editing}`);
+      }
+    } finally {
+      save.disabled = false;
+      save.textContent = "Save company";
+    }
     await renderCompanies();
   }
 
@@ -385,6 +645,17 @@ const COMPANY_INDUSTRIES = [
   $("company-close").addEventListener("click", closeCompany);
   $("company-cancel").addEventListener("click", closeCompany);
   $("company-save").addEventListener("click", saveOpenCompany);
+  $("company-delete").addEventListener("click", () => {
+    if (editingName) deleteCompany(editingName);
+  });
+  $("c-name").addEventListener("input", updateNameNote);
+  // Enter in the name field would otherwise do nothing at all.
+  $("c-name").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      saveOpenCompany();
+    }
+  });
   $("company-modal").addEventListener("click", (e) => {
     if (e.target === $("company-modal")) closeCompany();
   });
