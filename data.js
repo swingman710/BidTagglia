@@ -20,7 +20,7 @@ const FIELD_LISTS = {
     "Bill Ossowski", "Christopher Dion", "Roy Dowell", "James Foraker",
     "Christine Meyer", "Jim Meyer", "PJ Meyer", "Cameron Williams",
     "Bill Broomall", "Scott Hibbard", "Daniel Whitehurst", "Joe Zalewski",
-    "Mark Conomon", "Robby Bolen", "William Shahan", "John Weinhardt",
+    "Mark Conomon", "Robby Bolen", "Will Shahan", "John Weinhardt",
     "Steve Navert", "Justin Stockton", "Kelsey Sill", "Jordan Herrick",
   ],
 
@@ -29,7 +29,7 @@ const FIELD_LISTS = {
     "Bill Ossowski", "Christopher Dion", "Roy Dowell", "James Foraker",
     "Christine Meyer", "Jim Meyer", "PJ Meyer", "Cameron Williams",
     "Bill Broomall", "Scott Hibbard", "Daniel Whitehurst", "Joe Zalewski",
-    "Mark Conomon", "Robby Bolen", "William Shahan", "John Weinhardt",
+    "Mark Conomon", "Robby Bolen", "Will Shahan", "John Weinhardt",
     "Steve Navert", "Kelsey Sill", "Thanh Le", "Jason Carney", "Jordan Herrick",
   ],
 
