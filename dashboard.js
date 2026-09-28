@@ -402,6 +402,9 @@ async function fetchQuotes() {
   });
   if (error) return quotesCache;
   quotesCache = rows;
+  // Company names are searchable, so any blob built before this is stale.
+  rebuildQuoteCompanyText();
+  clearSearchCache();
 
   const stamps = new Map(); // opp id -> stamp of the quote we kept
   proposalPrices.clear();
@@ -453,6 +456,7 @@ async function refreshOpps() {
 
 // Everything that has to be redrawn once the bid list changes.
 function afterOppsChanged() {
+  rebuildDuplicates();
   seedYearFilter();
   updateFilterButton();
   renderChips();
@@ -641,6 +645,21 @@ function renderRowLimitNote(shown, total) {
 
 const searchCache = new Map(); // opportunity id -> lower-cased text of every field
 
+// Companies aren't a field on the bid — they're on its quotes — but "which
+// bids did we price to Turner" is exactly the kind of thing people search for,
+// so they're folded into the same blob.
+let quoteCompanyText = new Map(); // opportunity id -> company names on its quotes
+
+function rebuildQuoteCompanyText() {
+  quoteCompanyText = new Map();
+  for (const q of quotesCache) {
+    if (!q.company) continue;
+    const key = String(q.opportunity_id);
+    const seen = quoteCompanyText.get(key);
+    quoteCompanyText.set(key, seen ? seen + " " + q.company : String(q.company));
+  }
+}
+
 function searchBlob(o) {
   const key = String(o.id);
   const hit = searchCache.get(key);
@@ -652,7 +671,10 @@ function searchBlob(o) {
     if (Array.isArray(value)) parts.push(value.join(" "));
     else if (typeof value !== "object") parts.push(String(value));
   }
-  const blob = parts.join("  ").toLowerCase();
+  const companies = quoteCompanyText.get(key);
+  if (companies) parts.push(companies);
+
+  const blob = parts.join("  ").toLowerCase();
   searchCache.set(key, blob);
   return blob;
 }
@@ -661,6 +683,89 @@ function searchBlob(o) {
 // matching on what a bid used to say.
 function clearSearchCache() {
   searchCache.clear();
+}
+
+// ---------- Likely duplicates ----------
+// The same job gets entered twice more often than anyone would like — once
+// from an email and once from a plan room, or once per estimator. Flagged
+// rather than blocked: two bids really can share a name across years, so this
+// puts a marker next to them and leaves the judgement to a person.
+//
+// The rules are deliberately tight, because a marker on half the table would
+// be ignored within a week:
+//   * the same project number (those are meant to be unique), or
+//   * the same name AND the same bid due date, or
+//   * the same name AND the same owner.
+// A name on its own is not enough — "Fire Alarm" recurs for years.
+
+const duplicateOf = new Map(); // opportunity id -> [the bids it looks like]
+
+// Punctuation and spacing vary between whoever typed it and whatever the
+// import produced, so compare on letters and digits only.
+function dupeNormal(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function rebuildDuplicates() {
+  duplicateOf.clear();
+  const groups = new Map(); // signature -> [bids]
+
+  const add = (signature, o) => {
+    if (!signature) return;
+    const list = groups.get(signature);
+    if (list) list.push(o);
+    else groups.set(signature, [o]);
+  };
+
+  for (const o of loadOpps()) {
+    const name = dupeNormal(o.name);
+    const number = dupeNormal(o.internalBidNumber);
+    if (number) add(`#${number}`, o);
+    if (name && o.bidDueDate) add(`d|${name}|${o.bidDueDate}`, o);
+    if (name && o.ownerCustomer) add(`o|${name}|${dupeNormal(o.ownerCustomer)}`, o);
+  }
+
+  // One bid can match another on more than one rule, so collect through a map
+  // keyed by id rather than concatenating the groups.
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    for (const o of list) {
+      const key = String(o.id);
+      let others = duplicateOf.get(key);
+      if (!others) duplicateOf.set(key, (others = new Map()));
+      for (const other of list) {
+        if (String(other.id) !== key) others.set(String(other.id), other);
+      }
+    }
+  }
+}
+
+function duplicatesFor(o) {
+  const found = duplicateOf.get(String(o.id));
+  return found ? [...found.values()] : [];
+}
+
+// The red asterisk itself, or null when the bid looks unique.
+function duplicateMark(o) {
+  const others = duplicatesFor(o);
+  if (!others.length) return null;
+
+  const mark = document.createElement("span");
+  mark.className = "dupe-mark";
+  mark.textContent = "*";
+  mark.setAttribute("aria-label", "Possible duplicate");
+  const lines = others
+    .slice(0, 5)
+    .map((x) => `• ${x.name || "Untitled"}` +
+      (x.bidDueDate ? ` — due ${formatDate(x.bidDueDate)}` : "") +
+      (x.status ? ` (${x.status})` : ""));
+  if (others.length > lines.length) {
+    lines.push(`• and ${others.length - lines.length} more`);
+  }
+  mark.title =
+    `Possible duplicate of ${others.length} other bid` +
+    `${others.length === 1 ? "" : "s"}:\n${lines.join("\n")}`;
+  return mark;
 }
 
 // ---------- Estimator workload ----------
@@ -1040,6 +1145,9 @@ function activeFilterCount() {
 
 // Which column's values the open menu is showing.
 let filterColumn = "status";
+// Every bid that survived the current filters, in the order the table sorted
+// them. Set by render(); read by the exporter.
+let lastVisible = [];
 // Set by render() so the menu can say how many bids came through.
 let lastVisibleCount = 0;
 
@@ -1451,6 +1559,9 @@ function render() {
 
   const visible = sortOpps(opps.filter((o) => matches(o)));
   lastVisibleCount = visible.length;
+  // The exporter works from every bid that matched, not the page of them the
+  // table draws — that is the whole point of exporting.
+  lastVisible = visible;
   renderDivisionBar(opps.filter((o) => matches(o, "division")));
 
   // The stat strip describes every bid that matched, not just the page of
@@ -1485,6 +1596,8 @@ function render() {
     nameTd.textContent = opp.name || "—";
     // The column truncates, so keep the full name reachable on hover.
     if (opp.name) nameTd.title = opp.name;
+    const mark = duplicateMark(opp);
+    if (mark) nameTd.append(" ", mark);
 
     const numTd = document.createElement("td");
     numTd.className = "col-num";
@@ -1535,6 +1648,179 @@ function render() {
     tr.addEventListener("click", () => openDetail(opp));
     rows.appendChild(tr);
   }
+}
+
+// ---------- Export ----------
+// Whatever the filters, the search box and the sort currently add up to, as a
+// CSV. Deliberately exports every matching bid rather than the first
+// ROW_LIMIT the table draws — the row cap is there to keep the page quick to
+// paint, and has nothing to do with what you asked for.
+
+// [header, how to read it off a bid] — the on-screen columns, in table order.
+const EXPORT_TABLE_COLUMNS = [
+  ["Opportunity", (o) => o.name],
+  ["Project #", (o) => o.internalBidNumber],
+  ["Division", (o) => o.division],
+  ["Bid due date", (o) => o.bidDueDate],
+  ["Bid due time", (o) => formatTime(o.bidDueTime)],
+  ["Days until due", (o) => (hasCountdown(o) ? daysUntil(o.bidDueDate) : "")],
+  ["Project value", (o) => oppValue(o) || ""],
+  ["Lead estimator", (o) => o.leadEstimator],
+  ["Status", (o) => o.status],
+];
+
+// Everything else on the bid, appended after the columns above.
+const EXPORT_EXTRA_COLUMNS = [
+  ["Project manager", (o) => o.projectManager],
+  ["Owner / customer", (o) => o.ownerCustomer],
+  ["CM / GC", (o) => o.cm],
+  ["Architect", (o) => o.architect],
+  ["Engineer", (o) => o.engineer],
+  ["Local unions", (o) => o.localUnions],
+  ["Market segment", (o) => o.marketSegment],
+  ["Industry", (o) => o.industry],
+  ["Bid type", (o) => o.bidType],
+  ["Delivery method", (o) => o.deliveryMethod],
+  ["Requirements", (o) => o.flags],
+  ["Project address", (o) => o.projectAddress],
+  ["City", (o) => o.city],
+  ["State", (o) => o.state],
+  ["Zip code", (o) => o.zipCode],
+  ["Budgeted project value", (o) => o.budgetedProjectValue],
+  ["Budgeted cost", (o) => o.budgetedCost],
+  ["Final price", (o) => o.finalPrice],
+  ["Estimated labor hours", (o) => o.budgetedLaborHours],
+  ["Estimated square footage", (o) => o.budgetedSquareFootage],
+  ["Estimated project start", (o) => o.estStartDate],
+  ["Estimated project end", (o) => o.estEndDate],
+  ["Documents received", (o) => o.docsReceivedDate],
+  ["Companies priced", (o) => quoteCompanyText.get(String(o.id)) || ""],
+  ["Possible duplicate", (o) => (duplicatesFor(o).length ? "Yes" : "")],
+  ["Description / notes", (o) => o.description],
+];
+
+function exportColumns(which) {
+  return which === "all"
+    ? EXPORT_TABLE_COLUMNS.concat(EXPORT_EXTRA_COLUMNS)
+    : EXPORT_TABLE_COLUMNS;
+}
+
+// One CSV cell. A value containing a comma, a quote or a newline has to be
+// quoted, and any quote inside it doubled — that is the whole format.
+function csvCell(value) {
+  if (value == null) return "";
+  const text = Array.isArray(value) ? value.join("; ") : String(value);
+  return /[",\n\r]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+}
+
+function buildCsv(rows, columns) {
+  const lines = [columns.map(([header]) => csvCell(header)).join(",")];
+  for (const o of rows) {
+    lines.push(columns.map(([, read]) => csvCell(read(o))).join(","));
+  }
+  // CRLF and a BOM: Excel opens UTF-8 as the local codepage without one, which
+  // turns every accented company name into mojibake.
+  return "\ufeff" + lines.join("\r\n") + "\r\n";
+}
+
+function downloadCsv(text, filename) {
+  const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoking immediately can cancel the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+function exportFilename() {
+  const now = new Date();
+  const stamp =
+    `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-` +
+    String(now.getDate()).padStart(2, "0");
+  return `battag-bids-${stamp}.csv`;
+}
+
+// A plain-English recap of what is about to be exported, so nobody has to
+// guess whether the filters came with it.
+function exportScopeNote() {
+  const bits = [];
+  if (activeChip && QUICK_FILTERS[activeChip]) {
+    bits.push(`the "${QUICK_FILTERS[activeChip].label}" filter`);
+  }
+  if (statusFilter.size) bits.push(`the funnel (${[...statusFilter].join(", ")})`);
+  const n = activeFilterCount();
+  if (n) bits.push(`${n} column filter${n === 1 ? "" : "s"}`);
+  const query = search.value.trim();
+  if (query) bits.push(`the search for "${query}"`);
+  if (!bits.length) return "No filters are on — this is every bid currently loaded.";
+  return "Includes " + bits.join(", ") + ".";
+}
+
+function openExport() {
+  const modal = document.getElementById("export-modal");
+  if (!modal) return;
+  const total = lastVisible.length;
+
+  document.getElementById("export-count").textContent =
+    `${total.toLocaleString()} bid${total === 1 ? "" : "s"} match what is on ` +
+    "screen right now.";
+
+  // The thing people get caught out by: the table stops drawing at ROW_LIMIT.
+  const warn = document.getElementById("export-warn");
+  if (total > ROW_LIMIT) {
+    warn.hidden = false;
+    warn.textContent =
+      `The table only shows the first ${ROW_LIMIT.toLocaleString()} of these — ` +
+      `the export is not capped and will contain all ${total.toLocaleString()}.`;
+  } else {
+    warn.hidden = true;
+  }
+
+  // Earlier years arrive in the background; exporting before they land would
+  // quietly produce a short file.
+  const note = document.getElementById("export-note");
+  note.textContent = historyLoaded
+    ? exportScopeNote()
+    : `${exportScopeNote()} Bids due before ${RECENT_YEAR_FROM} are still ` +
+      "loading — wait a moment if you need them.";
+
+  document.getElementById("export-go").disabled = total === 0;
+  modal.hidden = false;
+}
+
+function closeExport() {
+  const modal = document.getElementById("export-modal");
+  if (modal) modal.hidden = true;
+}
+
+function runExport() {
+  const picked = document.querySelector('input[name="export-cols"]:checked');
+  const rows = lastVisible;
+  if (!rows.length) return;
+  downloadCsv(
+    buildCsv(rows, exportColumns(picked ? picked.value : "table")),
+    exportFilename()
+  );
+  closeExport();
+  toastOk(`Exported ${rows.length.toLocaleString()} bids`);
+}
+
+{
+  const modal = document.getElementById("export-modal");
+  document.getElementById("export-opps")?.addEventListener("click", openExport);
+  document.getElementById("export-close")?.addEventListener("click", closeExport);
+  document.getElementById("export-cancel")?.addEventListener("click", closeExport);
+  document.getElementById("export-go")?.addEventListener("click", runExport);
+  modal?.addEventListener("click", (e) => {
+    if (e.target === modal) closeExport();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && modal && !modal.hidden) closeExport();
+  });
 }
 
 // ---------- Top-level views (nav tabs) ----------
@@ -2439,6 +2725,58 @@ async function setOppStatus(o, status) {
   });
 }
 
+// The asterisk in the table says "look at this"; this says what to look at,
+// with a way straight to the other bid.
+function renderDuplicateNote(o, mount) {
+  const others = duplicatesFor(o);
+  if (!others.length) return;
+
+  const box = document.createElement("div");
+  box.className = "dupe-note";
+
+  const head = document.createElement("div");
+  head.className = "dupe-note-head";
+  head.innerHTML = '<span class="dupe-mark">*</span>';
+  const text = document.createElement("span");
+  text.textContent =
+    `Looks like ${others.length} other bid${others.length === 1 ? "" : "s"} ` +
+    "already on file — same project number, or the same name with the same " +
+    "due date or owner.";
+  head.appendChild(text);
+  box.appendChild(head);
+
+  const list = document.createElement("div");
+  list.className = "dupe-list";
+  for (const other of others.slice(0, 6)) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "dupe-link";
+    const name = document.createElement("span");
+    name.className = "dupe-link-name";
+    name.textContent = other.name || "Untitled";
+    const when = document.createElement("span");
+    when.className = "dupe-link-when";
+    when.textContent = other.bidDueDate ? formatDate(other.bidDueDate) : "no due date";
+    b.append(name, when);
+    if (other.status) {
+      const pill = document.createElement("span");
+      pill.className = `status ${statusClass(other.status)}`;
+      pill.textContent = other.status;
+      b.appendChild(pill);
+    }
+    b.addEventListener("click", () => openDetail(other));
+    list.appendChild(b);
+  }
+  if (others.length > 6) {
+    const more = document.createElement("div");
+    more.className = "crec-more";
+    more.textContent = `+ ${others.length - 6} more`;
+    list.appendChild(more);
+  }
+  box.appendChild(list);
+  mount.appendChild(box);
+}
+
 function renderStatusStepper(o, mount) {
   const wrap = document.createElement("div");
   wrap.className = "opp-status";
@@ -2844,6 +3182,7 @@ function renderDetail(o) {
   bar.append(editBtn, printBtn);
   pane.appendChild(bar);
 
+  renderDuplicateNote(o, pane);
   renderStatusStepper(o, pane);
   renderTrackRecord(o, pane);
 
@@ -3534,6 +3873,11 @@ markSortedHeader();
 // not at a few thousand, so wait for a pause in typing.
 let searchTimer = null;
 search.addEventListener("input", () => {
+  // Search is meant to reach every bid in the database, so the first keystroke
+  // stops waiting out the cooldown and pulls the earlier years in now. Without
+  // this, searching in the first few seconds silently misses everything due
+  // before RECENT_YEAR_FROM.
+  if (search.value.trim()) loadHistoryNow();
   clearTimeout(searchTimer);
   searchTimer = setTimeout(render, 150);
 });

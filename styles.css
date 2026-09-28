@@ -3679,3 +3679,141 @@ table.bids tbody tr.bid-row {
 tr.is-inactive td {
   opacity: 0.55;
 }
+
+/* ==========================================================================
+   LIKELY DUPLICATES
+   ========================================================================== */
+
+/* The marker beside a bid name in the table. Red and raised, so it reads as a
+   flag rather than as part of the name. */
+.dupe-mark {
+  color: var(--red);
+  font-weight: 800;
+  font-size: 15px;
+  line-height: 1;
+  vertical-align: super;
+  cursor: help;
+}
+
+/* The same flag, explained, on the bid itself. */
+.dupe-note {
+  border: 1px solid var(--red-border);
+  background: var(--red-soft);
+  border-radius: 6px;
+  padding: 11px 13px;
+  margin-bottom: 16px;
+}
+
+.dupe-note-head {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--red);
+}
+
+.dupe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 9px;
+}
+
+.dupe-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 5px;
+  padding: 6px 9px;
+  cursor: pointer;
+}
+
+.dupe-link:hover {
+  border-color: var(--red);
+}
+
+.dupe-link-name {
+  flex: 1;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dupe-link-when {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   EXPORT DIALOG
+   ========================================================================== */
+
+.export-count {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* The row cap is the thing people get caught out by, so it is styled as a
+   warning rather than as fine print. */
+.export-warn {
+  margin: 0 0 14px;
+  padding: 9px 11px;
+  border: 1px solid var(--amber-border, var(--border-2));
+  background: var(--amber-soft);
+  border-radius: 5px;
+  font-size: 12.5px;
+  color: var(--chip-amber, var(--ink));
+}
+
+.export-warn[hidden] {
+  display: none;
+}
+
+.export-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-2);
+  border-radius: 5px;
+  margin-bottom: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.export-opt:hover {
+  border-color: var(--blue);
+}
+
+.export-opt input {
+  accent-color: var(--blue);
+  margin-top: 2px;
+  flex: none;
+}
+
+.export-opt small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--faint);
+}
+
+.export-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}

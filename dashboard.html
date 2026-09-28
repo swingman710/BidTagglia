@@ -106,6 +106,7 @@
             <input id="search" type="text" placeholder="Search any field — name, project #, city, notes…" />
           </div>
           <div class="controls-right">
+            <button id="export-opps" class="btn-ghost sm">Export</button>
             <button id="new-opp" class="btn-primary inline">+ New Opportunity</button>
           </div>
         </div>
@@ -765,6 +766,44 @@
             <button type="submit" class="btn-primary" id="modal-submit">Save opportunity</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- Export modal -->
+    <div id="export-modal" class="modal-overlay" hidden>
+      <div class="modal">
+        <div class="modal-head">
+          <h2>Export opportunities</h2>
+          <button class="modal-close" id="export-close" title="Close">✕</button>
+        </div>
+
+        <p class="export-count" id="export-count"></p>
+        <p class="export-warn" id="export-warn" hidden></p>
+
+        <div class="field">
+          <label>Columns</label>
+          <label class="export-opt">
+            <input type="radio" name="export-cols" value="table" checked />
+            <span>
+              The columns on screen
+              <small>Opportunity, project #, division, due date, value, estimator, status</small>
+            </span>
+          </label>
+          <label class="export-opt">
+            <input type="radio" name="export-cols" value="all" />
+            <span>
+              Every field on the bid
+              <small>All of the above plus team, location, budget, schedule and notes</small>
+            </span>
+          </label>
+        </div>
+
+        <p class="export-note" id="export-note"></p>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" id="export-cancel">Cancel</button>
+          <button type="button" class="btn-primary" id="export-go">Download CSV</button>
+        </div>
       </div>
     </div>
 
