@@ -100,9 +100,12 @@ SNAPSHOT = "bk_20261027_pricing_quotes"
 IMPORT_DAY = "2026-08-31"
 IMPORT_STAMP = f"{IMPORT_DAY}T00:00:00+00:00"
 
-AUDIT_CSV = os.path.expanduser(
-    "~/Desktop/BidTagglia/backups/pricing_merge_audit_20261027.csv"
-)
+# A dry run writes to its own file. Sharing one would let a later dry run —
+# which by then has nothing left to report, the merge having happened —
+# overwrite the record of what the real run actually did.
+AUDIT_DIR = os.path.expanduser("~/Desktop/BidTagglia/backups")
+AUDIT_CSV = f"{AUDIT_DIR}/pricing_merge_audit_20261027.csv"
+AUDIT_DRY_CSV = f"{AUDIT_DIR}/pricing_merge_planned_20261027.csv"
 
 csv.field_size_limit(sys.maxsize)
 
@@ -443,14 +446,16 @@ def check_snapshot():
     return count
 
 
-def write_audit(audit):
-    os.makedirs(os.path.dirname(AUDIT_CSV), exist_ok=True)
-    with open(AUDIT_CSV, "w", newline="") as fh:
+def write_audit(audit, dry):
+    path = AUDIT_DRY_CSV if dry else AUDIT_CSV
+    os.makedirs(AUDIT_DIR, exist_ok=True)
+    with open(path, "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["bid", "company", "what happened", "price before",
                     "price after", "fields changed"])
         w.writerows(audit)
-    print(f"  audit of every change: {AUDIT_CSV}")
+    print(f"  {'what it would change' if dry else 'audit of every change'}: "
+          f"{path}")
 
 
 def main():
@@ -482,7 +487,7 @@ def main():
         print(f"  old ids: {', '.join(sorted(no_such_bid, key=int)[:20])}"
               + (" ..." if len(no_such_bid) > 20 else ""))
 
-    write_audit(audit)
+    write_audit(audit, args.dry_run)
 
     if args.dry_run:
         print("\n--- dry run, nothing written ---")
