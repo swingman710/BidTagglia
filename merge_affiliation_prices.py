@@ -78,7 +78,6 @@ Re-running is safe: it recomputes the same answer from the same export.
 import argparse
 import collections
 import csv
-import datetime
 import json
 import os
 import re
@@ -305,12 +304,16 @@ def build_wanted():
 def plan():
     wanted, skipped, total_rows = build_wanted()
 
+    # Ordered because the read is paged: PostgREST applies limit/offset
+    # without a sort of its own, so an unordered read of several pages can
+    # repeat a row on one page and miss it on the next.
     opps = page_all("/rest/v1/opportunities?select=id,legacy_id,name"
-                    "&legacy_id=not.is.null")
+                    "&legacy_id=not.is.null&order=id")
     by_legacy = {str(o["legacy_id"]): o for o in opps}
 
     quotes = page_all("/rest/v1/pricing_quotes?select=id,opportunity_id,company,"
-                      "type,price,price_sent_on,notes,status,created_at")
+                      "type,price,price_sent_on,notes,status,created_at"
+                      "&order=id")
     by_bid = collections.defaultdict(list)
     for q in quotes:
         by_bid[str(q["opportunity_id"])].append(q)

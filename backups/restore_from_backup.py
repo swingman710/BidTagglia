@@ -22,7 +22,6 @@ from if this file is ever lost.
 """
 
 import argparse
-import datetime
 import json
 import os
 import sys
@@ -97,7 +96,7 @@ def main():
                  f"{', '.join(sorted(tables))}")
 
     rows = tables[args.table]
-    live = page_all(f"/rest/v1/{args.table}?select=*")
+    live = page_all(f"/rest/v1/{args.table}?select=*&order=id")
     taken = backup["taken_at"][:19]
     newer = [r for r in live
              if str(r.get("created_at") or "") > taken]
@@ -133,10 +132,7 @@ def main():
         call("POST", f"/rest/v1/{args.table}", group, prefer="return=minimal")
         done += len(group)
         print(f"  restored {done}/{len(rows)}")
-    after = call("GET", f"/rest/v1/{args.table}?select=id&limit=1",
-                 prefer="count=exact")
-    print(f"\ndone — {args.table} is back to {datetime.datetime.now():%H:%M} "
-          f"with the backup's {len(rows)} rows.")
+    print(f"\ndone — {args.table} holds the backup's {len(rows)} rows again.")
 
 
 if __name__ == "__main__":
