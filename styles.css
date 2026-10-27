@@ -4091,3 +4091,118 @@ tr.is-estimator td {
 .inline-form-hint[hidden] {
   display: none;
 }
+
+/* ==========================================================================
+   Live / Snapshot switch
+   Sits under the division bar. Reads the pre-merge copies of the bid tables
+   so the 27 Oct 2026 pricing merge can be compared against what it replaced.
+   Amber throughout when on: the page is showing history and refusing writes.
+   ========================================================================== */
+
+.db-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--page-bg);
+}
+
+.db-switch[hidden] {
+  display: none;
+}
+
+.db-switch-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* The checkbox stays in the page rather than being display:none, so it keeps
+   its focus ring and its place in the tab order. */
+.db-switch-control input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.db-switch-track {
+  position: relative;
+  display: block;
+  width: 34px;
+  height: 18px;
+  flex: none;
+  border: 1px solid var(--border-2);
+  border-radius: 999px;
+  background: var(--surface);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.db-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.15s, background 0.15s;
+}
+
+.db-switch-control input:checked + .db-switch-track {
+  background: var(--amber-soft);
+  border-color: #e2b878;
+}
+
+.db-switch-control input:checked + .db-switch-track .db-switch-knob {
+  transform: translateX(16px);
+  background: var(--amber);
+}
+
+.db-switch-control input:focus-visible + .db-switch-track {
+  box-shadow: var(--ring);
+}
+
+.db-switch-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.db-switch-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.db-switch.is-snapshot {
+  background: var(--amber-soft);
+  border-bottom-color: #e2b878;
+}
+
+.db-switch.is-snapshot .db-switch-label,
+.db-switch.is-snapshot .db-switch-note {
+  color: var(--chip-amber);
+}
+
+.db-switch.is-snapshot .db-switch-note {
+  font-weight: 600;
+}
+
+/* A reminder at the edge of the eye wherever you scroll to, so a historical
+   number is never mistaken for a current one. Fixed to the viewport rather
+   than drawn on the body, which stops short of the bottom on a short page,
+   and click-through so it never gets in the way of the page under it. */
+body.snapshot-mode::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  border: 3px solid var(--amber);
+  pointer-events: none;
+  z-index: 9999;
+}

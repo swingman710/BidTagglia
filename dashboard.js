@@ -4199,6 +4199,57 @@ search.addEventListener("input", () => {
   searchTimer = setTimeout(render, 150);
 });
 
+// ---------- Live / Snapshot switch ----------
+// Switches the bid tables the page reads between the live ones and the
+// pre-merge copies taken on 27 Oct 2026, so the merged prices can be checked
+// against what was there before them. The mechanics are in supabase.js; this
+// is the control and the warning that goes with it.
+
+async function setUpDbSwitch() {
+  const host = document.getElementById("db-switch");
+  const input = document.getElementById("db-switch-input");
+  const label = document.getElementById("db-switch-label");
+  const note = document.getElementById("db-switch-note");
+  if (!host || !input) return;
+
+  const on = snapshotOn();
+
+  // The switch only appears if there is something to switch to. Asking for a
+  // single row is the cheapest way to find out, and naming the copy directly
+  // reads the same table whichever mode the page is in.
+  const { error } = await sb
+    .from(`${SNAPSHOT_PREFIX}pricing_quotes`)
+    .select("id")
+    .limit(1);
+  if (error) {
+    // No snapshot in this database — leave the switch hidden rather than
+    // offering a comparison that would come back empty.
+    if (on) setSnapshot(false);
+    return;
+  }
+
+  input.checked = on;
+  label.textContent = on ? "Snapshot" : "Live data";
+  note.textContent = on
+    ? `showing ${SNAPSHOT_LABEL} — read-only`
+    : "switch to compare against the pre-merge prices";
+  host.classList.toggle("is-snapshot", on);
+  host.hidden = false;
+
+  if (on) {
+    // Hard to miss, on purpose: every number on the page is historical while
+    // this is on, and a save will be refused.
+    document.body.classList.add("snapshot-mode");
+    document.title = `[Snapshot] ${document.title}`;
+  }
+
+  input.addEventListener("change", () => setSnapshot(input.checked));
+}
+
 // The first and only unprompted read of bid data — held behind the gate so an
 // uninvited account never pulls it into the browser at all.
 BBAccess.ready.then(refreshOpps);
+
+// Behind the same gate, but not behind the bid read — the switch should appear
+// while the thousands of rows it affects are still arriving.
+BBAccess.ready.then(setUpDbSwitch);

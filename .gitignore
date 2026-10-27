@@ -14,3 +14,13 @@ node_modules/
 # Env
 .env
 .env.local
+
+# Database backups and the merge audit trail.
+#
+# These hold the whole database — every bid, contact and member email. The
+# repo is served as-is by Vercel with no build step, so a file committed here
+# is downloadable from battag.bid by anyone who guesses the name. The dumps
+# stay on the machine that made them; the second copy lives in Supabase as the
+# bk_* snapshot tables. The scripts in backups/ are code and are tracked.
+backups/*.json
+backups/*.csv

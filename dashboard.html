@@ -170,6 +170,19 @@
           <!-- Division pills, built by dashboard.js -->
           <div class="filter-bar" id="division-bar" hidden></div>
 
+          <!-- Live / Snapshot switch. Reads the pre-merge copies of the bid
+               tables so the merged prices can be compared against what was
+               there before — see supabase.js. dashboard.js unhides it only
+               when the snapshot is actually present. -->
+          <div class="db-switch" id="db-switch" hidden>
+            <label class="db-switch-control">
+              <input type="checkbox" id="db-switch-input" />
+              <span class="db-switch-track" aria-hidden="true"><span class="db-switch-knob"></span></span>
+              <span class="db-switch-label" id="db-switch-label">Live data</span>
+            </label>
+            <span class="db-switch-note" id="db-switch-note"></span>
+          </div>
+
           <div class="table-wrap">
             <table class="bids opp-table">
               <thead>
