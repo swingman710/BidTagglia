@@ -1939,7 +1939,7 @@ table.bids.opp-table {
 
 table.bids.opp-table th:nth-child(2),
 table.bids.opp-table td:nth-child(2) {   /* Project # */
-  width: 8%;
+  width: 9%;
 }
 
 table.bids.opp-table th:nth-child(3),
@@ -4644,4 +4644,283 @@ table.bids.opp-table td.col-rank {
 
 .rank-ring.xs svg circle {
   stroke-width: 3.6;
+}
+
+/* ==========================================================================
+   REQUIRED FIELDS — markers, the save-time warning, the Bid To rows
+   ========================================================================== */
+
+.form-section > legend .req {
+  color: var(--red);
+}
+
+/* A required field left empty, once Save has been pressed. */
+.field.is-invalid input,
+.field.is-invalid select,
+.field.is-invalid .mc-control,
+#bid-to-section.is-invalid .bt-company {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px var(--red-soft);
+}
+
+.field.is-invalid > label,
+#bid-to-section.is-invalid > legend {
+  color: var(--red);
+}
+
+.form-error {
+  margin-top: 18px;
+  padding: 10px 12px;
+  border: 1px solid var(--red-border);
+  background: var(--red-soft);
+  color: var(--red);
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.form-error[hidden] {
+  display: none;
+}
+
+.bt-hint {
+  margin: -6px 0 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.bt-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.bt-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px 30px;
+  gap: 8px;
+  align-items: center;
+}
+
+.bt-row input {
+  width: 100%;
+  padding: 10px 12px;
+}
+
+.bt-row .bt-price input {
+  padding-left: 24px;
+}
+
+.bt-remove {
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--faint);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.bt-remove:hover {
+  border-color: var(--red-border);
+  color: var(--red);
+}
+
+.bt-remove[hidden] {
+  visibility: hidden;
+  display: inline-block;
+}
+
+@media (max-width: 640px) {
+  .bt-row {
+    grid-template-columns: minmax(0, 1fr) 30px;
+  }
+  .bt-row .bt-price {
+    grid-row: 2;
+  }
+}
+
+/* ==========================================================================
+   REPORTS — which report
+   ========================================================================== */
+
+.rep-switch {
+  display: inline-flex;
+  margin-bottom: 16px;
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface);
+  max-width: 100%;
+}
+
+.rep-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  background: var(--surface);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 8px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rep-switch-btn + .rep-switch-btn {
+  border-left: 1px solid var(--border-2);
+}
+
+.rep-switch-btn:hover {
+  background: var(--page-bg);
+}
+
+.rep-switch-btn.is-active {
+  background: var(--blue-soft);
+  color: var(--blue-dark);
+}
+
+.rep-switch-btn:focus-visible {
+  outline: none;
+  box-shadow: inset var(--ring);
+}
+
+/* ==========================================================================
+   REPORTS — Omissions
+   ========================================================================== */
+
+.om-head {
+  flex-wrap: wrap;
+}
+
+.om-urgent-word {
+  color: var(--red);
+}
+
+.om-select {
+  padding: 6px 10px;
+  font-size: 12.5px;
+}
+
+.om-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.om-fields[hidden] {
+  display: none;
+}
+
+/* A field and how many bids lack it. Red for required, amber for the rest. */
+.om-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 6px 4px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--chip-amber);
+  cursor: pointer;
+}
+
+.om-field.urgent {
+  color: var(--red);
+  border-color: var(--red-border);
+}
+
+.om-field:hover {
+  background: var(--amber-soft);
+}
+
+.om-field.urgent:hover {
+  background: var(--red-soft);
+}
+
+.om-field.is-active {
+  background: var(--amber-soft);
+  border-color: var(--amber);
+  box-shadow: 0 0 0 1px var(--amber);
+}
+
+.om-field.urgent.is-active {
+  background: var(--red-soft);
+  border-color: var(--red);
+  box-shadow: 0 0 0 1px var(--red);
+}
+
+.om-field-n {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--amber-soft);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.om-field.urgent .om-field-n {
+  background: var(--red-soft);
+}
+
+.om-table td.om-name {
+  font-weight: 600;
+  color: var(--blue-dark);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The bids with a required field missing carry a red edge, so they stand out
+   from the merely incomplete ones without reading the chips. */
+.om-table tr.om-is-urgent td:first-child {
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
+.om-missing {
+  white-space: normal;
+}
+
+.om-chip {
+  display: inline-block;
+  margin: 2px 4px 2px 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--chip-amber);
+  background: var(--amber-soft);
+  white-space: nowrap;
+}
+
+.om-chip.urgent {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+/* The header is a word wider than the rings below it; tighter side padding
+   keeps it whole, sort arrow included, without widening the column. */
+table.bids.opp-table th.col-rank {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.rep-switch {
+  margin-top: 16px;
+}
+
+/* --chip-amber is a light-theme ink; on the dark ground it needs the lighter
+   amber to stay readable. The urgent ones stay red. */
+:root[data-theme="dark"] .om-field:not(.urgent),
+:root[data-theme="dark"] .om-chip:not(.urgent) {
+  color: var(--amber);
 }

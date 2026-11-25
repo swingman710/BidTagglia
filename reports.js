@@ -1,5 +1,11 @@
 // ===========================================================================
-//  Reports view — win/loss analytics over saved opportunities.
+//  Reports view. Three reports, picked with the buttons at the top:
+//
+//    Win / Loss  — this file, below
+//    Overdue     — overdue.js
+//    Omissions   — omissions.js
+//
+//  The rest of this header is about Win / Loss.
 //
 //  Pick values for any number of variables (lead estimator, company bid to,
 //  division, …). A bid is counted when it matches EVERY variable that has a
@@ -503,7 +509,7 @@
 
   // Options come from saved bids: rebuild the filter row only when the set of
   // available values actually changed (a bid was added or edited).
-  function openReports() {
+  function openWinLoss() {
     if (!built) {
       buildGroupBy();
       built = true;
@@ -517,7 +523,49 @@
     runReport();
   }
 
-  onViewOpen("reports", openReports);
+  // ---------- Which report ----------
+
+  const REPORTS = {
+    winloss: openWinLoss,
+    overdue: () => BBOverdue.openOverdue(),
+    omissions: () => BBOmissions.open(),
+  };
+  const REPORT_KEY = "battag_report";
+
+  let report = "winloss";
+  try {
+    const saved = localStorage.getItem(REPORT_KEY);
+    if (saved && REPORTS[saved]) report = saved;
+  } catch (e) {
+    /* storage disabled — start on Win / Loss */
+  }
+
+  function showReport(name) {
+    report = name;
+    try {
+      localStorage.setItem(REPORT_KEY, name);
+    } catch (e) {
+      /* only a convenience */
+    }
+    for (const btn of document.querySelectorAll(".rep-switch-btn")) {
+      const on = btn.dataset.report === name;
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-selected", String(on));
+    }
+    for (const key of Object.keys(REPORTS)) {
+      $(`rep-pane-${key}`).hidden = key !== name;
+    }
+    REPORTS[name]();
+  }
+
+  $("rep-switch").addEventListener("click", (e) => {
+    const btn = e.target.closest(".rep-switch-btn");
+    if (btn && btn.dataset.report !== report) showReport(btn.dataset.report);
+  });
+
+  // Opening the tab, or the bids changing under it, re-runs whichever report
+  // is showing.
+  onViewOpen("reports", () => showReport(report));
 
   $("rep-groupby").addEventListener("change", (e) => {
     groupBy = e.target.value;

@@ -490,7 +490,8 @@ function afterOppsChanged() {
   render();
   renderCharts(oppsCache);
   if (window.BBOverdue) BBOverdue.renderBadge();
-  refreshActiveView(); // the Reports and Overdue tabs list bids too
+  if (window.BBOmissions) BBOmissions.renderBadge();
+  refreshActiveView(); // the reports list bids too
 }
 
 // ---------- Static option sets ----------
@@ -595,7 +596,7 @@ const ACTIVE_STATUSES = [
 // A bid past its due date while still reading as live. Everything active
 // except On Hold (Bid) — that one is somebody deliberately parking a bid, not
 // somebody forgetting to update it. Used by the Overdue chip and the Overdue
-// tab, which have to agree: two different numbers under the same word is how
+// report, which have to agree: two different numbers under the same word is how
 // people learn to distrust both.
 const OVERDUE_STATUSES = [
   "Future Opportunity", "Budgeting", "Bidding", "Pending",
@@ -609,6 +610,69 @@ function isOverdueBid(o) {
 }
 function isActive(o) {
   return ACTIVE_STATUSES.includes(o.status);
+}
+
+// ---------- Required fields ----------
+// What every bid has to carry. The form won't save without the REQUIRED ones,
+// and the Omissions report lists every bid that is still missing any of
+// either list — the REQUIRED ones as urgent. Both read from here so the form
+// and the report can't disagree about what "required" means.
+//
+// `bidTo` isn't a field on the bid: it is the company on a proposal quote
+// (the old tracker's "Bid To:"), so it is checked against the quotes.
+const REQUIRED_FIELDS = [
+  { key: "internalBidNumber", label: "Bid number", input: "f-internal-number" },
+  { key: "status", label: "Status", input: "f-status" },
+  { key: "division", label: "Division", input: "f-division" },
+  { key: "name", label: "Opportunity name", input: "f-name" },
+  { key: "budgetedProjectValue", label: "Current value", input: "f-proj-value" },
+  { key: "bidTo", label: "Bid to", input: "bt-rows" },
+  { key: "bidDueDate", label: "Bid due date", input: "f-due-date" },
+  { key: "leadEstimator", label: "Lead estimator", input: "f-lead-estimator" },
+  { key: "state", label: "State", input: "f-state" },
+];
+
+// Not required to save, but a bid without them is incomplete.
+const EXPECTED_FIELDS = [
+  { key: "projectManager", label: "Project manager" },
+  { key: "ownerCustomer", label: "Owner" },
+  { key: "cm", label: "CM / GC" },
+  { key: "architect", label: "Architect" },
+  { key: "engineer", label: "Engineer" },
+  { key: "localUnions", label: "Local unions" },
+  { key: "bidType", label: "Bid type" },
+  { key: "deliveryMethod", label: "Delivery method" },
+  { key: "city", label: "City" },
+  { key: "projectAddress", label: "Project address" },
+];
+
+// Opportunity ids (as text) with at least one proposal naming a company.
+function bidToIds() {
+  const ids = new Set();
+  for (const q of quotesCache) {
+    if (q.type === "proposal" && String(q.company || "").trim()) {
+      ids.add(String(q.opportunity_id));
+    }
+  }
+  return ids;
+}
+
+function fieldMissing(o, key, bidTo) {
+  if (key === "bidTo") return !bidTo.has(String(o.id));
+  const v = o[key];
+  if (Array.isArray(v)) return !v.some((x) => String(x || "").trim());
+  // A value of 0 is a value nobody entered.
+  if (key === "budgetedProjectValue") return !(Number(v) > 0);
+  return !String(v ?? "").trim();
+}
+
+// { urgent: [field], expected: [field] } — what this bid is missing. Pass
+// bidToIds() in when checking many bids, so it is built once.
+function omissionsFor(o, bidTo = bidToIds()) {
+  return {
+    urgent: REQUIRED_FIELDS.filter((f) => fieldMissing(o, f.key, bidTo)),
+    expected: EXPECTED_FIELDS.filter((f) => fieldMissing(o, f.key, bidTo)),
+  };
 }
 
 // Funnel segment colors per status.
@@ -914,7 +978,7 @@ const QUICK_FILTERS = {
   overdue: {
     label: "Overdue",
     tone: "bad", // a date has already passed
-    // Same rule as the Overdue tab, deliberately.
+    // Same rule as the Overdue report, deliberately.
     match: isOverdueBid,
   },
   mine: {
@@ -2148,7 +2212,7 @@ function renderEstimatorChart(opps) {
   const body = canvas.parentElement;
 
   // Former employees, ticked off the graphs on the Users tab. Their bids are
-  // still in every report and still on the Overdue tab — what this stops is a
+  // still in every report, the Overdue one included — what this stops is a
   // name that left two years ago sitting at the top of the chart as though it
   // were live work.
   const hidden = window.BBUsers ? BBUsers.hiddenFromCharts() : new Set();
@@ -2755,6 +2819,8 @@ function openModal(opp) {
   editingId = opp && opp.id != null ? opp.id : null;
   buildForm(opp);
   if (opp) populateForm(opp);
+  setupBidTo(opp);
+  clearFormErrors();
 
   document.getElementById("modal-title").textContent = editingId
     ? "Edit Opportunity"
@@ -2791,6 +2857,123 @@ document.getElementById("modal-delete").addEventListener("click", async () => {
 modal.addEventListener("click", (e) => {
   if (e.target === modal) closeModal();
 });
+
+// ---------- Bid To (on the form) ----------
+// The company a bid goes to is a proposal quote, not a field on the bid, but
+// it is required — so a new bid is written down with its proposal. Only the
+// company is needed; the price can follow on the Pricing tab. An existing bid
+// that already has a proposal doesn't show this: its proposals are edited on
+// the Pricing tab like any other.
+
+const bidToSection = document.getElementById("bid-to-section");
+const bidToRows = document.getElementById("bt-rows");
+
+function addBidToRow() {
+  const row = document.createElement("div");
+  row.className = "bt-row";
+  row.innerHTML =
+    `<input type="text" class="bt-company" list="dl-quote-company" ` +
+    `autocomplete="off" placeholder="Company — search or add new…" ` +
+    `aria-label="Company bid to" />` +
+    `<div class="input-prefix bt-price"><span>$</span>` +
+    `<input type="number" min="0" step="0.01" placeholder="Price (optional)" ` +
+    `aria-label="Price" /></div>` +
+    `<button type="button" class="bt-remove" title="Remove">✕</button>`;
+  row.querySelector(".bt-remove").addEventListener("click", () => {
+    row.remove();
+    syncBidToRemove();
+  });
+  bidToRows.appendChild(row);
+  syncBidToRemove();
+  return row;
+}
+
+// The last row can't be removed — there has to be somewhere to type.
+function syncBidToRemove() {
+  const rows = bidToRows.querySelectorAll(".bt-row");
+  for (const r of rows) r.querySelector(".bt-remove").hidden = rows.length === 1;
+}
+
+function setupBidTo(opp) {
+  const needed = !opp || !bidToIds().has(String(opp.id));
+  bidToSection.hidden = !needed;
+  bidToRows.innerHTML = "";
+  if (!needed) return;
+  fillDatalist("dl-quote-company", knownCompanies());
+  addBidToRow();
+}
+
+document.getElementById("bt-add").addEventListener("click", () => {
+  addBidToRow().querySelector(".bt-company").focus();
+});
+
+// [{ company, price }] for every row with a company in it.
+function readBidTo() {
+  if (bidToSection.hidden) return [];
+  const out = [];
+  for (const row of bidToRows.querySelectorAll(".bt-row")) {
+    // Reuse the existing spelling when this company has been bid before.
+    const company = canonicalCompany(row.querySelector(".bt-company").value);
+    if (!company) continue;
+    const raw = row.querySelector(".bt-price input").value;
+    const price = raw === "" ? null : Number(raw);
+    out.push({ company, price: Number.isFinite(price) ? price : null });
+  }
+  return out;
+}
+
+// ---------- Required-field check ----------
+
+function clearFormErrors() {
+  document.getElementById("form-error").hidden = true;
+  for (const el of oppForm.querySelectorAll(".is-invalid")) {
+    el.classList.remove("is-invalid");
+  }
+}
+
+// The required fields the form still has empty, as REQUIRED_FIELDS entries.
+function missingOnForm(opp, bidTo) {
+  return REQUIRED_FIELDS.filter((f) =>
+    f.key === "bidTo"
+      ? !bidToSection.hidden && !bidTo.length
+      : fieldMissing(opp, f.key)
+  );
+}
+
+function showFormErrors(missing) {
+  clearFormErrors();
+  for (const f of missing) {
+    const el = document.getElementById(f.input);
+    const box = f.key === "bidTo" ? bidToSection : el && el.closest(".field");
+    if (box) box.classList.add("is-invalid");
+  }
+  const note = document.getElementById("form-error");
+  note.textContent =
+    "Still required: " + missing.map((f) => f.label).join(", ") + ".";
+  note.hidden = false;
+
+  const first = document.getElementById(missing[0].input);
+  const target =
+    missing[0].key === "bidTo" ? bidToRows.querySelector(".bt-company") : first;
+  if (target) {
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    target.focus({ preventScroll: true });
+  }
+}
+
+// Filling a field in takes its warning away straight off, rather than on the
+// next save.
+for (const type of ["input", "change"]) {
+  oppForm.addEventListener(type, (e) => {
+    const box = e.target.closest(".field, #bid-to-section");
+    if (box && box.classList.contains("is-invalid")) {
+      box.classList.remove("is-invalid");
+    }
+    if (!oppForm.querySelector(".is-invalid")) {
+      document.getElementById("form-error").hidden = true;
+    }
+  });
+}
 
 // ---------- Detail view ----------
 
@@ -4056,21 +4239,49 @@ function checkedValues(cgId) {
 
 // ---------- Actions ----------
 
-async function addOpp(opp) {
-  const { error } = await sb.from(SUPABASE_TABLE).insert(toRow(opp));
+// The Bid To companies from the form, as Draft proposal quotes.
+async function addBidToQuotes(id, bidTo) {
+  if (!bidTo.length) return;
+  const { error } = await sb.from(PRICING_TABLE).insert(
+    bidTo.map(({ company, price }) => ({
+      opportunity_id: String(id),
+      type: "proposal",
+      company,
+      price,
+      status: "Draft",
+    }))
+  );
+  if (error) {
+    toastError(
+      "The bid saved, but its Bid To company didn't: " + error.message +
+      ". Add it on the bid's Pricing tab."
+    );
+    return;
+  }
+  for (const { company } of bidTo) rememberCompany(company);
+}
+
+async function addOpp(opp, bidTo = []) {
+  const { data, error } = await sb
+    .from(SUPABASE_TABLE)
+    .insert(toRow(opp))
+    .select("id")
+    .single();
   if (error) {
     toastError("Could not save opportunity: " + error.message);
     return;
   }
+  await addBidToQuotes(data.id, bidTo);
   await refreshOpps();
 }
 
-async function updateOpp(id, opp) {
+async function updateOpp(id, opp, bidTo = []) {
   const { error } = await sb.from(SUPABASE_TABLE).update(toRow(opp)).eq("id", id);
   if (error) {
     toastError("Could not update opportunity: " + error.message);
     return;
   }
+  await addBidToQuotes(id, bidTo);
   await refreshOpps();
   // Its due date may have moved it out of the recent window.
   if (await syncOppRow(id)) afterOppsChanged();
@@ -4157,13 +4368,15 @@ oppForm.addEventListener("keydown", (e) => {
 // which it did on every single bid — and the handler only ever called
 // preventDefault anyway, so nothing about it needed to be a submit.
 function saveOppForm() {
-  const name = document.getElementById("f-name");
-  if (!val("f-name")) {
-    // The field is still required, but nothing submits the form any more, so
-    // ask for the browser's own message rather than silently moving the
-    // cursor.
-    name.focus();
-    name.reportValidity();
+  const opp = readForm();
+  const bidTo = readBidTo();
+
+  // Every required field, listed together, rather than one complaint per
+  // click. Applies to editing an old bid too: saving it is when the gaps the
+  // Omissions report lists get filled.
+  const missing = missingOnForm(opp, bidTo);
+  if (missing.length) {
+    showFormErrors(missing);
     return;
   }
 
@@ -4174,9 +4387,8 @@ function saveOppForm() {
     return;
   }
 
-  const opp = readForm();
-  if (editingId != null) updateOpp(editingId, opp);
-  else addOpp(opp);
+  if (editingId != null) updateOpp(editingId, opp, bidTo);
+  else addOpp(opp, bidTo);
 
   closeModal();
 }

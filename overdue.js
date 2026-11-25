@@ -1,6 +1,6 @@
 // ===========================================================================
-//  Overdue tab — bids whose due date has passed while they still read as live,
-//  grouped by the estimator they belong to.
+//  Overdue report (on the Reports tab) — bids whose due date has passed while
+//  they still read as live, grouped by the estimator they belong to.
 //
 //  The point of the tab is not to list dates, it is to get the status put
 //  right: a bid that has been sitting at Bidding for two years is not "late",
@@ -10,6 +10,9 @@
 //  What counts as overdue is OVERDUE_STATUSES / isOverdueBid() in dashboard.js,
 //  shared with the Overdue quick filter on the Opportunities tab so the two
 //  can never disagree.
+//
+//  Shown by reports.js when Overdue is picked on the Reports tab; see
+//  openOverdue().
 // ===========================================================================
 
 (() => {
@@ -60,8 +63,8 @@
     );
   }
 
-  // The count on the nav tab. Deliberately ignores the "only mine" tick — the
-  // badge is about the whole backlog, not the current view of it.
+  // The count on the report's button. Deliberately ignores the "only mine"
+  // tick — the badge is about the whole backlog, not the current view of it.
   function totalOverdue() {
     let n = 0;
     for (const o of loadOpps()) if (isOverdueBid(o)) n++;
@@ -210,14 +213,14 @@
   });
 
   // Overdue is a question about the whole history, not the recent window.
-  onViewOpen("overdue", async () => {
+  async function openOverdue() {
     await ensureHistory();
     renderOverdue();
-  });
+  }
 
   // The badge has to be right before anyone opens the tab, so it is refreshed
   // whenever the bid list changes rather than only on view.
   BBAccess.ready.then(renderBadge);
 
-  window.BBOverdue = { renderOverdue, renderBadge };
+  window.BBOverdue = { openOverdue, renderOverdue, renderBadge };
 })();

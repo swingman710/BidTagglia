@@ -34,7 +34,7 @@
   const isEstimatorRow = (m) => m.source === "estimator";
 
   // Lower-cased names to leave off the dashboard graphs — former employees,
-  // mostly. Deliberately NOT applied to the reports, the Overdue tab or any
+  // mostly. Deliberately NOT applied to the reports (Overdue included) or any
   // total: their bid history is real history and the win rates are made of it.
   // Read through BBUsers.hiddenFromCharts(); a plain Set of names because that
   // is what it has to match on — a bid records who the estimator was as text,

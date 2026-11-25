@@ -86,9 +86,6 @@
     <nav class="mainnav">
       <div class="mainnav-inner">
         <button class="nav-tab active" data-view="opportunities">Opportunities</button>
-        <button class="nav-tab" data-view="overdue">
-          Overdue<span class="tab-badge" id="overdue-badge" hidden>0</span>
-        </button>
         <button class="nav-tab" data-view="ranking">
           Ranking<span class="tab-badge" id="ranking-badge" hidden>0</span>
         </button>
@@ -210,26 +207,6 @@
         </section>
        </div>
 
-       <!-- ================= Overdue view ================= -->
-       <div class="view" id="view-overdue" hidden>
-        <section class="panel">
-          <div class="table-head">
-            <h2>Overdue bids by estimator</h2>
-            <span id="overdue-count" class="count-pill">0</span>
-            <span class="rep-hint">
-              Past their bid due date and still showing as live. Set the real
-              status here and they drop off the list.
-            </span>
-            <label class="head-check">
-              <input type="checkbox" id="overdue-mine" />
-              <span>Only mine</span>
-            </label>
-          </div>
-          <div id="overdue-body" class="overdue-body"></div>
-          <div id="overdue-empty" class="empty">Nothing overdue — everything is up to date.</div>
-        </section>
-       </div>
-
        <!-- ================= Ranking view ================= -->
        <div class="view" id="view-ranking" hidden>
         <section class="panel">
@@ -249,6 +226,21 @@
 
        <!-- ================= Reports view ================= -->
        <div class="view" id="view-reports" hidden>
+        <!-- Which report. Each button shows one .rep-pane; reports.js. -->
+        <div class="rep-switch" id="rep-switch" role="tablist">
+          <button type="button" class="rep-switch-btn is-active" data-report="winloss"
+                  role="tab" aria-selected="true">Win / Loss</button>
+          <button type="button" class="rep-switch-btn" data-report="overdue"
+                  role="tab" aria-selected="false">
+            Overdue<span class="tab-badge" id="overdue-badge" hidden>0</span>
+          </button>
+          <button type="button" class="rep-switch-btn" data-report="omissions"
+                  role="tab" aria-selected="false">
+            Omissions<span class="tab-badge" id="omissions-badge" hidden>0</span>
+          </button>
+        </div>
+
+        <div class="rep-pane" id="rep-pane-winloss">
         <section class="panel report-panel">
           <div class="table-head">
             <h2>Win / Loss report</h2>
@@ -362,6 +354,68 @@
           </div>
           <div id="rep-empty" class="empty">No bids match these filters.</div>
         </section>
+        </div>
+
+        <!-- Overdue: bids past their due date still showing as live -->
+        <div class="rep-pane" id="rep-pane-overdue" hidden>
+        <section class="panel">
+          <div class="table-head">
+            <h2>Overdue bids by estimator</h2>
+            <span id="overdue-count" class="count-pill">0</span>
+            <span class="rep-hint">
+              Past their bid due date and still showing as live. Set the real
+              status here and they drop off the list.
+            </span>
+            <label class="head-check">
+              <input type="checkbox" id="overdue-mine" />
+              <span>Only mine</span>
+            </label>
+          </div>
+          <div id="overdue-body" class="overdue-body"></div>
+          <div id="overdue-empty" class="empty">Nothing overdue — everything is up to date.</div>
+        </section>
+        </div>
+
+        <!-- Omissions: bids missing required or expected fields -->
+        <div class="rep-pane" id="rep-pane-omissions" hidden>
+        <section class="panel">
+          <div class="table-head om-head">
+            <h2>Omissions</h2>
+            <span id="om-count" class="count-pill">0</span>
+            <span class="rep-hint">
+              Bids missing information. <strong class="om-urgent-word">Urgent</strong>
+              is a required field; the rest should be filled in when known.
+              Click a bid to fill it in.
+            </span>
+            <select id="om-scope" class="om-select" aria-label="Which bids">
+              <option value="active">Active bids</option>
+              <option value="all">All bids</option>
+            </select>
+            <label class="head-check">
+              <input type="checkbox" id="om-mine" />
+              <span>Only mine</span>
+            </label>
+          </div>
+          <!-- One chip per field with how many bids lack it; click to filter. -->
+          <div class="om-fields" id="om-fields"></div>
+          <div class="table-wrap">
+            <table class="bids om-table">
+              <thead>
+                <tr>
+                  <th>Opportunity</th>
+                  <th>Bid Due</th>
+                  <th>Lead Estimator</th>
+                  <th class="col-status">Status</th>
+                  <th>Missing</th>
+                </tr>
+              </thead>
+              <tbody id="om-rows"></tbody>
+            </table>
+          </div>
+          <div id="om-note" class="row-limit" hidden></div>
+          <div id="om-empty" class="empty">Nothing missing.</div>
+        </section>
+        </div>
        </div>
 
        <!-- ================= Companies view ================= -->
@@ -637,7 +691,7 @@
               </div>
               <div class="field-pair">
                 <div class="field">
-                  <label for="f-due-date">Bid due date</label>
+                  <label for="f-due-date">Bid due date <span class="req">*</span></label>
                   <input type="date" id="f-due-date" />
                 </div>
                 <div class="field">
@@ -646,7 +700,7 @@
                 </div>
               </div>
               <div class="field">
-                <label for="f-division">Division</label>
+                <label for="f-division">Division <span class="req">*</span></label>
                 <select id="f-division"></select>
               </div>
               <div class="field">
@@ -655,18 +709,18 @@
                 <datalist id="dl-pm"></datalist>
               </div>
               <div class="field">
-                <label for="f-lead-estimator">Lead estimator</label>
+                <label for="f-lead-estimator">Lead estimator <span class="req">*</span></label>
                 <input type="text" id="f-lead-estimator" list="dl-lead-estimator" placeholder="Select or type…" />
                 <datalist id="dl-lead-estimator"></datalist>
                 <!-- Workload warning, filled by dashboard.js -->
                 <p class="field-note" id="workload-note" hidden></p>
               </div>
               <div class="field">
-                <label for="f-status">Opportunity status</label>
+                <label for="f-status">Opportunity status <span class="req">*</span></label>
                 <select id="f-status"></select>
               </div>
               <div class="field">
-                <label for="f-internal-number">Internal bid number</label>
+                <label for="f-internal-number">Internal bid number <span class="req">*</span></label>
                 <input type="text" id="f-internal-number" />
               </div>
             </div>
@@ -769,7 +823,7 @@
                 <input type="text" id="f-zip" inputmode="numeric" autocomplete="off" />
               </div>
               <div class="field">
-                <label for="f-state">State</label>
+                <label for="f-state">State <span class="req">*</span></label>
                 <select id="f-state" autocomplete="off"></select>
               </div>
             </div>
@@ -780,7 +834,7 @@
             <legend>Budget &amp; Schedule</legend>
             <div class="section-grid">
               <div class="field">
-                <label for="f-proj-value">Budgeted project value</label>
+                <label for="f-proj-value">Current value <span class="hint-inline">(budgeted project value)</span> <span class="req">*</span></label>
                 <div class="input-prefix">
                   <span>$</span>
                   <input type="number" id="f-proj-value" min="0" step="0.01" />
@@ -822,6 +876,23 @@
               </div>
             </div>
           </fieldset>
+
+          <!-- Section 7: Bid to. The company on a proposal quote — the old
+               tracker's "Bid To:". Shown for a new bid, and for an existing
+               one that has no proposal yet; otherwise proposals live on the
+               bid's Pricing tab. Only the company is required. -->
+          <fieldset class="form-section" id="bid-to-section">
+            <legend>Bid To <span class="req">*</span></legend>
+            <p class="bt-hint">
+              Who this bid goes to. Only the company is required — the price
+              can be added later on the bid's Pricing tab.
+            </p>
+            <div id="bt-rows" class="bt-rows"></div>
+            <button type="button" class="btn-ghost sm" id="bt-add">+ Another company</button>
+          </fieldset>
+
+          <!-- Lists whatever required field is still empty on save. -->
+          <div class="form-error" id="form-error" hidden></div>
 
           <div class="modal-actions">
             <!-- Editing only: revealed by openModal() -->
@@ -994,6 +1065,7 @@
     <script src="dashboard.js"></script>
     <script src="reports.js"></script>
     <script src="overdue.js"></script>
+    <script src="omissions.js"></script>
     <script src="companies.js"></script>
     <script src="contacts.js"></script>
     <script src="activities.js"></script>
