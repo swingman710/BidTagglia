@@ -3562,8 +3562,13 @@ function renderTrackRecord(o, mount) {
 
   const wrap = document.createElement("div");
   wrap.className = "record-grid";
+  // The bids behind whichever card is open, under the cards.
+  const panel = document.createElement("div");
+  panel.className = "record-bids";
+  panel.hidden = true;
+  let openKey = null;
 
-  for (const { name, roles } of entries.values()) {
+  for (const [key, { name, roles }] of entries) {
     const r = companyRecord(name);
     const decided = r.won.length + r.lost.length;
     const rate = decided ? Math.round((r.won.length / decided) * 100) : null;
@@ -3590,11 +3595,144 @@ function renderTrackRecord(o, mount) {
     card.querySelector(".record-name").textContent = name;
     card.querySelector(".record-name").title = name;
     card.querySelector(".record-role").textContent = roles.join(" · ");
+
+    // Click (or Enter) to list every bid these numbers were made from.
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-expanded", "false");
+    card.title = `Show every bid with ${name}`;
+    const toggle = () => {
+      const opening = openKey !== key;
+      openKey = opening ? key : null;
+      for (const c of wrap.children) {
+        c.classList.remove("is-open");
+        c.setAttribute("aria-expanded", "false");
+      }
+      if (opening) {
+        card.classList.add("is-open");
+        card.setAttribute("aria-expanded", "true");
+        renderRecordBids(panel, o, name, r);
+      }
+      panel.hidden = !opening;
+    };
+    card.addEventListener("click", toggle);
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle();
+      }
+    });
     wrap.appendChild(card);
   }
 
-  sec.appendChild(wrap);
+  sec.append(wrap, panel);
   mount.appendChild(sec);
+}
+
+// The bids behind one track-record card: every bid the company is on, with how
+// each went for THEM — which is not always the bid's own status, since a bid
+// we won through another company's proposal is a loss for this one.
+const RECORD_BID_LIMIT = 200;
+
+function renderRecordBids(panel, current, name, record) {
+  const key = companyKey(canonicalCompany(name));
+  const rows = record.bids
+    .map((b) => ({ b, outcome: outcomeForCompany(b, key) }))
+    .sort((x, y) =>
+      String(y.b.bidDueDate || "").localeCompare(String(x.b.bidDueDate || ""))
+    );
+  const counts = {
+    all: rows.length,
+    Won: rows.filter((x) => x.outcome === "Won").length,
+    Lost: rows.filter((x) => x.outcome === "Lost").length,
+    open: rows.filter((x) => !x.outcome).length,
+  };
+  let filter = "all";
+
+  const draw = () => {
+    panel.innerHTML = "";
+
+    const head = document.createElement("div");
+    head.className = "record-bids-head";
+    const title = document.createElement("strong");
+    title.textContent = name;
+    head.appendChild(title);
+    const filters = document.createElement("div");
+    filters.className = "record-bids-filters";
+    for (const [value, label] of [
+      ["all", "All"],
+      ["Won", "Won"],
+      ["Lost", "Lost"],
+      ["open", "Undecided"],
+    ]) {
+      if (value !== "all" && !counts[value]) continue;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = `record-filter${filter === value ? " is-active" : ""}`;
+      b.textContent = `${label} ${counts[value]}`;
+      b.addEventListener("click", () => {
+        filter = value;
+        draw();
+      });
+      filters.appendChild(b);
+    }
+    head.appendChild(filters);
+    panel.appendChild(head);
+
+    const list = rows.filter((x) =>
+      filter === "all" ? true : filter === "open" ? !x.outcome : x.outcome === filter
+    );
+    const ul = document.createElement("div");
+    ul.className = "record-bid-list";
+    for (const { b, outcome } of list.slice(0, RECORD_BID_LIMIT)) {
+      const self = String(b.id) === String(current.id);
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "record-bid";
+      row.disabled = self;
+      row.title = self ? "The bid you're looking at" : "Open this bid";
+
+      const nm = document.createElement("span");
+      nm.className = "record-bid-name";
+      nm.textContent = (b.name || "Untitled") + (self ? " (this bid)" : "");
+      const due = document.createElement("span");
+      due.className = "record-bid-due";
+      due.textContent = b.bidDueDate ? formatDate(b.bidDueDate) : "—";
+      const value = document.createElement("span");
+      value.className = "record-bid-value";
+      value.textContent = currency.format(
+        Number(b.finalPrice) || Number(b.budgetedProjectValue) || 0
+      );
+      const pill = document.createElement("span");
+      // Their outcome when decided; otherwise where the bid stands.
+      const shown = outcome || b.status || "—";
+      pill.className = `status ${statusClass(shown)}`;
+      pill.textContent = shown;
+      if (outcome === "Lost" && b.status === "Won") {
+        pill.title = "We won this bid through another company's proposal";
+      }
+      row.append(nm, due, value, pill);
+      if (!self) {
+        row.addEventListener("click", () => {
+          openDetail(b);
+          // Opened from partway down another bid: start this one at the top.
+          detailModal.querySelector(".modal").scrollTop = 0;
+        });
+      }
+      ul.appendChild(row);
+    }
+    panel.appendChild(ul);
+
+    if (list.length > RECORD_BID_LIMIT) {
+      const more = document.createElement("p");
+      more.className = "record-bids-more";
+      more.textContent =
+        `Showing the latest ${RECORD_BID_LIMIT} of ${list.length.toLocaleString()} — ` +
+        "the Companies tab has the full history.";
+      panel.appendChild(more);
+    }
+  };
+  draw();
 }
 
 function renderDetail(o) {

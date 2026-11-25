@@ -4941,3 +4941,160 @@ table.bids.opp-table th.col-rank {
 :root[data-theme="dark"] .om-chip:not(.urgent) {
   color: var(--amber);
 }
+
+/* ---- Track record: a card opens the list of bids behind it ---- */
+
+.record-card[role="button"] {
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.record-card[role="button"]:hover {
+  border-color: var(--border-2);
+  box-shadow: var(--shadow-sm);
+}
+
+.record-card[role="button"]:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.record-card.is-open {
+  background: var(--surface);
+  border-color: var(--blue);
+  border-left-color: var(--rec);
+  box-shadow: var(--ring);
+}
+
+.record-bids {
+  margin-top: 10px;
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.record-bids[hidden] {
+  display: none;
+}
+
+.record-bids-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 12px;
+  background: var(--band);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.record-bids-filters {
+  display: flex;
+  gap: 5px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.record-filter {
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.record-filter.is-active {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  color: var(--blue-dark);
+}
+
+.record-bid-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.record-bid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 110px 96px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 12px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.record-bid:first-child {
+  border-top: 0;
+}
+
+.record-bid:not(:disabled):hover {
+  background: var(--band-2);
+}
+
+.record-bid:not(:disabled):hover .record-bid-name {
+  text-decoration: underline;
+}
+
+.record-bid:disabled {
+  cursor: default;
+  background: var(--page-bg);
+}
+
+.record-bid-name {
+  font-weight: 600;
+  color: var(--blue-dark);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-bid:disabled .record-bid-name {
+  color: var(--muted);
+}
+
+.record-bid-due {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.record-bid-value {
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.record-bid .status {
+  justify-self: start;
+}
+
+.record-bids-more {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+@media (max-width: 640px) {
+  .record-bid {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .record-bid-due,
+  .record-bid-value {
+    display: none;
+  }
+}
