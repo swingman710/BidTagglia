@@ -455,7 +455,7 @@ function showLoadingRows(n = 12) {
   const tbody = document.getElementById("bid-rows");
   if (!tbody || tbody.childElementCount) return;
   document.getElementById("empty").style.display = "none";
-  const widths = [70, 45, 40, 55, 35, 50, 60, 45]; // one per column
+  const widths = [70, 45, 40, 55, 35, 50, 30, 60, 45]; // one per column
   for (let i = 0; i < n; i++) {
     const tr = document.createElement("tr");
     tr.className = "skeleton-row";
@@ -1615,6 +1615,7 @@ const SORT_KEYS = {
   bidDue: (o) => o.bidDueDate || "",
   days: (o) => daysUntil(o.bidDueDate),
   value: oppValue,
+  rank: (o) => (window.BBRankings ? BBRankings.summaryFor(o.id).avg : null),
   leadEstimator: (o) => (o.leadEstimator || "").toLowerCase(),
   status: (o) => (o.status || "").toLowerCase(),
 };
@@ -1645,7 +1646,7 @@ function setSort(key) {
     sortBy = key;
     // Text reads best A-Z; numbers and dates are usually wanted biggest or
     // soonest first, so start those the other way round.
-    sortDir = key === "value" || key === "days" ? -1 : 1;
+    sortDir = key === "value" || key === "days" || key === "rank" ? -1 : 1;
   }
   markSortedHeader();
   render();
@@ -1762,6 +1763,16 @@ function render() {
     valueTd.className = "col-value";
     valueTd.textContent = currency.format(oppValue(opp));
 
+    // Blank until somebody has been asked to rank it.
+    const rankTd = document.createElement("td");
+    rankTd.className = "col-rank";
+    if (window.BBRankings) {
+      const summary = BBRankings.summaryFor(opp.id);
+      if (summary.asked.length) {
+        rankTd.appendChild(BBRankings.buildRing(summary, { size: "xs" }));
+      }
+    }
+
     const pmTd = document.createElement("td");
     pmTd.className = "col-pm";
     pmTd.textContent = opp.leadEstimator || "—";
@@ -1778,7 +1789,7 @@ function render() {
       statusTd.textContent = "—";
     }
 
-    tr.append(nameTd, numTd, divTd, dueTd, daysTd, valueTd, pmTd, statusTd);
+    tr.append(nameTd, numTd, divTd, dueTd, daysTd, valueTd, rankTd, pmTd, statusTd);
     tr.className = "bid-row";
     tr.addEventListener("click", () => openDetail(opp));
     rows.appendChild(tr);
@@ -1800,6 +1811,10 @@ const EXPORT_TABLE_COLUMNS = [
   ["Bid due time", (o) => formatTime(o.bidDueTime)],
   ["Days until due", (o) => (hasCountdown(o) ? daysUntil(o.bidDueDate) : "")],
   ["Project value", (o) => oppValue(o) || ""],
+  ["Ranking", (o) => {
+    const avg = window.BBRankings ? BBRankings.summaryFor(o.id).avg : null;
+    return avg == null ? "" : avg.toFixed(1);
+  }],
   ["Lead estimator", (o) => o.leadEstimator],
   ["Status", (o) => o.status],
 ];

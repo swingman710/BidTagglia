@@ -124,8 +124,22 @@ function rankHue(score) {
       return rows;
     }
     tableMissing = false;
+    // What the Opportunities table shows for each bid. Redraw it only when
+    // that changed — this runs every time a bid is opened.
+    const shape = (list) =>
+      list.map((r) => `${r.id}:${r.opportunity_id}:${r.score}:${r.submitted_at}`).join("|");
+    const changed = shape(data) !== shape(rows);
     rows = data;
     loaded = true;
+    byOpp = new Map();
+    for (const r of rows) {
+      const list = byOpp.get(r.opportunity_id);
+      if (list) list.push(r);
+      else byOpp.set(r.opportunity_id, [r]);
+    }
+    // Not before the bids are in: an empty redraw would swap the loading
+    // rows for "No opportunities yet".
+    if (changed && loadOpps().length) render();
     return rows;
   }
 
@@ -135,9 +149,12 @@ function rankHue(score) {
     return people;
   }
 
+  // opportunity id -> its rows. The Opportunities table asks once per bid on
+  // every render and sort, so this can't be a scan of every row each time.
+  let byOpp = new Map();
+
   function rowsFor(oppId) {
-    const id = String(oppId);
-    return rows.filter((r) => r.opportunity_id === id);
+    return byOpp.get(String(oppId)) || [];
   }
 
   function summaryFor(oppId) {
@@ -160,9 +177,10 @@ function rankHue(score) {
 
   // `summary` from summaryFor(). The arc is the score out of 100, so the ring
   // says how high it is at a glance as well as by colour.
-  function buildRing(summary, { small = false } = {}) {
+  // `size`: "sm" on the Ranking tab, "xs" in the Opportunities table.
+  function buildRing(summary, { size } = {}) {
     const ring = document.createElement("span");
-    ring.className = `rank-ring${small ? " sm" : ""}`;
+    ring.className = `rank-ring${size ? " " + size : ""}`;
     const pending = summary.avg == null;
     if (pending) ring.classList.add("is-pending");
     else ring.style.setProperty("--rank-hue", rankHue(summary.avg).toFixed(1));
@@ -714,7 +732,7 @@ function rankHue(score) {
     const cap = document.createElement("span");
     cap.className = "rk-overall-cap";
     cap.textContent = respondedText(summary);
-    overall.append(cap, buildRing(summary, { small: true }));
+    overall.append(cap, buildRing(summary, { size: "sm" }));
     head.appendChild(overall);
 
     card.appendChild(head);

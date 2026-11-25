@@ -1939,7 +1939,7 @@ table.bids.opp-table {
 
 table.bids.opp-table th:nth-child(2),
 table.bids.opp-table td:nth-child(2) {   /* Project # */
-  width: 9%;
+  width: 8%;
 }
 
 table.bids.opp-table th:nth-child(3),
@@ -1949,7 +1949,7 @@ table.bids.opp-table td:nth-child(3) {   /* Division */
 
 table.bids.opp-table th:nth-child(4),
 table.bids.opp-table td:nth-child(4) {   /* Bid Due */
-  width: 12%;
+  width: 11%;
 }
 
 table.bids.opp-table th:nth-child(5),
@@ -1959,7 +1959,7 @@ table.bids.opp-table td:nth-child(5) {   /* Days Until Due */
 
 table.bids.opp-table th.col-value,
 table.bids.opp-table td.col-value {      /* Project Value */
-  width: 12%;
+  width: 11%;
 }
 
 /* These override the shared 190px — a percentage keeps them in proportion as
@@ -1969,6 +1969,11 @@ table.bids.opp-table td.col-pm,
 table.bids.opp-table th.col-status,
 table.bids.opp-table td.col-status {
   width: 14%;
+}
+
+table.bids.opp-table th.col-pm,
+table.bids.opp-table td.col-pm {
+  width: 12%;
 }
 
 table.bids.opp-table td.col-num {
@@ -4228,8 +4233,14 @@ body.snapshot-mode::after {
   --rank-color: hsl(var(--rank-hue, 0) 75% 62%);
 }
 
-.rank-ring.is-pending {
+.rank-ring.is-pending,
+:root[data-theme="dark"] .rank-ring.is-pending {
   --rank-color: var(--faint);
+}
+
+/* Nobody has answered: just the track, not a zero-length arc's stray dot. */
+.rank-ring.is-pending .rank-arc {
+  display: none;
 }
 
 .rank-ring svg {
@@ -4605,4 +4616,32 @@ body.snapshot-mode::after {
 .rk-ctx-muted {
   color: var(--faint);
   font-weight: 400;
+}
+
+/* Ranking in the Opportunities table: small enough not to make the dense rows
+   any taller. */
+table.bids.opp-table th.col-rank,
+table.bids.opp-table td.col-rank {
+  width: 7%;
+  text-align: center;
+}
+
+table.bids.opp-table td.col-rank {
+  padding-top: 0;
+  padding-bottom: 0;
+  vertical-align: middle;
+}
+
+.rank-ring.xs {
+  width: 26px;
+  height: 26px;
+  vertical-align: middle;
+}
+
+.rank-ring.xs .rank-num {
+  font-size: 10.5px;
+}
+
+.rank-ring.xs svg circle {
+  stroke-width: 3.6;
 }
