@@ -3875,18 +3875,30 @@ async function addPricing(row) {
   const { error } = await sb.from(PRICING_TABLE).insert(row);
   if (error) {
     toastError("Could not save price: " + error.message);
-    return;
+    return false;
   }
   pricingDirty = true;
+  return true;
 }
 
-// Statuses a bid can be moved on from automatically: the stages that come
-// before Pending. Anywhere later — Won, Lost, on hold — someone has made a
-// decision the app shouldn't overrule, and moving it would be a step
-// backwards anyway.
-const AUTO_ADVANCE_FROM = new Set([
-  "Future Opportunity", "Budgeting", "Bidding",
-]);
+// The status a bid is moved on from automatically when a price is submitted:
+// Bidding only (the old tracker's "Pursuing"). A Future Opportunity or a
+// Budgeting job sending a number out is a budget, not the bid going in, and
+// anything later — Won, Lost, on hold — is a decision the app shouldn't
+// overrule.
+const AUTO_ADVANCE_FROM = new Set(["Bidding"]);
+
+// A price out of the door is the moment the bid is waiting on someone else,
+// so move it to Pending — and say so, since changing something the person
+// didn't ask to change needs to be visible.
+async function advanceOnSubmit() {
+  if (!detailOpp || !AUTO_ADVANCE_FROM.has(detailOpp.status)) return;
+  const previous = detailOpp.status;
+  await setOppStatus(detailOpp, "Pending");
+  if (detailOpp.status === "Pending") {
+    toast(`Price submitted — moved this bid from ${previous} to Pending`);
+  }
+}
 
 async function updatePricingStatus(id, status) {
   // Won is not just a status on one quote — it decides the bid.
@@ -3903,18 +3915,7 @@ async function updatePricingStatus(id, status) {
     return;
   }
   renderPricing();
-
-  // A price out of the door is the moment the bid is waiting on someone else,
-  // so move it on — but only from a stage that hasn't been decided yet, and
-  // say so, since changing something the person didn't ask to change needs to
-  // be visible.
-  if (status === "Sent" && detailOpp && AUTO_ADVANCE_FROM.has(detailOpp.status)) {
-    const previous = detailOpp.status;
-    await setOppStatus(detailOpp, "Pending");
-    if (detailOpp.status === "Pending") {
-      toast(`Price sent — moved this bid from ${previous} to Pending`);
-    }
-  }
+  if (status === "Sent") await advanceOnSubmit();
 }
 
 // Marking a proposal Won is the one place the whole bid is decided:
@@ -4193,18 +4194,27 @@ function showQuoteForm(type, mount, quote) {
       notes: field("notes").value.trim() || null,
     };
 
+    // A sent-on date means the price has gone out: a Draft saved with one
+    // becomes Sent, exactly as if Sent had been clicked. Anything already
+    // past Draft keeps its status.
+    const submitted =
+      !!values.price_sent_on && (!editing || quote.status === "Draft");
+
     if (editing) {
-      if (!(await updatePricing(quote.id, values))) return;
+      const patch = submitted ? { ...values, status: "Sent" } : values;
+      if (!(await updatePricing(quote.id, patch))) return;
     } else {
-      await addPricing({
+      const added = await addPricing({
         opportunity_id: String(detailOpp.id),
         type,
         ...values,
-        status: "Draft",
+        status: submitted ? "Sent" : "Draft",
       });
+      if (!added) return;
     }
     mount.innerHTML = "";
     renderPricing();
+    if (submitted) await advanceOnSubmit();
   });
   field("company").focus();
 }
