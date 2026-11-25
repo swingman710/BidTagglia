@@ -524,6 +524,14 @@ const currency = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
+// "$4.2M" — for totals shown in a small space, with the exact figure on hover.
+const compactCurrency = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
 function formatDate(value) {
   if (!value) return "—";
   const d = new Date(`${value}T12:00:00`);
@@ -3522,57 +3530,29 @@ function companyRecord(name) {
 // Reports can already work this out, but the useful moment is while you are
 // looking at the job — not in a report opened separately, if at all.
 
-function recordAgainst(match, exceptId) {
-  let won = 0;
-  let lost = 0;
-  for (const o of loadOpps()) {
-    if (String(o.id) === String(exceptId)) continue;
-    if (!match(o)) continue;
-    if (o.status === "Won") won++;
-    else if (o.status === "Lost") lost++;
-  }
-  return { won, lost, decided: won + lost };
-}
-
+// One card per company on this bid — the owner, each CM/GC, and every company
+// it was bid to — with our won/lost record alongside them by count and by
+// value. A company in more than one of those roles (a GC that is also who we
+// priced, usually) gets one card listing both, not two copies of the same
+// numbers. The numbers are companyRecord()'s, the same as the Companies tab.
 function renderTrackRecord(o, mount) {
-  const cards = [];
+  const entries = new Map(); // company key -> { name, roles }
+  const add = (name, role) => {
+    const display = canonicalCompany(name);
+    const key = companyKey(display);
+    if (!key) return;
+    const entry = entries.get(key) || { name: display, roles: [] };
+    if (!entry.roles.includes(role)) entry.roles.push(role);
+    entries.set(key, entry);
+  };
+  const asList = (v) => (Array.isArray(v) ? v : [v]);
 
-  const owner = (o.ownerCustomer || "").trim();
-  if (owner) {
-    cards.push([
-      owner,
-      "as owner / customer",
-      recordAgainst(
-        (x) => (x.ownerCustomer || "").trim().toLowerCase() === owner.toLowerCase(),
-        o.id
-      ),
-    ]);
+  for (const name of asList(o.ownerCustomer)) add(name, "Owner");
+  for (const name of asList(o.cm)) add(name, "CM / GC");
+  for (const q of quotesCache) {
+    if (String(q.opportunity_id) === String(o.id)) add(q.company, "Bid to");
   }
-
-  // Companies this bid was priced to, from the Pricing tab.
-  const quoted = new Set(
-    quotesCache
-      .filter((q) => String(q.opportunity_id) === String(o.id))
-      .map((q) => canonicalCompany(q.company))
-      .filter(Boolean)
-  );
-  for (const company of quoted) {
-    const key = companyKey(company);
-    // Bids priced to the same company, found through their quotes.
-    const oppIds = new Set(
-      quotesCache
-        .filter((q) => companyKey(canonicalCompany(q.company)) === key)
-        .map((q) => String(q.opportunity_id))
-    );
-    cards.push([
-      company,
-      "as company bid to",
-      recordAgainst((x) => oppIds.has(String(x.id)), o.id),
-    ]);
-  }
-
-  const useful = cards.filter(([, , r]) => r.decided > 0);
-  if (!useful.length) return;
+  if (!entries.size) return;
 
   const sec = document.createElement("section");
   sec.className = "detail-section";
@@ -3583,21 +3563,33 @@ function renderTrackRecord(o, mount) {
   const wrap = document.createElement("div");
   wrap.className = "record-grid";
 
-  for (const [name, role, r] of useful) {
-    const rate = Math.round((r.won / r.decided) * 100);
+  for (const { name, roles } of entries.values()) {
+    const r = companyRecord(name);
+    const decided = r.won.length + r.lost.length;
+    const rate = decided ? Math.round((r.won.length / decided) * 100) : null;
     const card = document.createElement("div");
     card.className =
-      "record-card " + (rate >= 50 ? "good" : rate >= 25 ? "mid" : "poor");
+      "record-card " +
+      (rate === null ? "none" : rate >= 50 ? "good" : rate >= 25 ? "mid" : "poor");
     card.innerHTML =
       `<div class="record-top"><span class="record-name"></span>` +
-      `<span class="record-rate">${rate}%</span></div>` +
+      `<span class="record-rate">${rate === null ? "—" : rate + "%"}</span></div>` +
       `<div class="record-role"></div>` +
-      `<div class="record-bar"><span style="width:${rate}%"></span></div>` +
-      `<div class="record-tally">${r.won} won · ${r.lost} lost` +
-      ` <span class="record-of">of ${r.decided} decided</span></div>`;
+      `<div class="record-bar"><span style="width:${rate || 0}%"></span></div>` +
+      (decided
+        ? `<div class="record-tally"><span class="good">${r.won.length} won</span>` +
+          ` · <span class="bad">${r.lost.length} lost</span>` +
+          ` <span class="record-of">of ${decided} decided</span></div>` +
+          `<div class="record-tally record-money">` +
+          `<span class="good" title="${currency.format(r.wonValue)}">` +
+          `${compactCurrency.format(r.wonValue)} won</span>` +
+          ` · <span class="bad" title="${currency.format(r.lostValue)}">` +
+          `${compactCurrency.format(r.lostValue)} lost</span></div>`
+        : `<div class="record-tally record-of">No decided bids yet</div>`);
     // Company and owner names are free text, so set them as text, not markup.
     card.querySelector(".record-name").textContent = name;
-    card.querySelector(".record-role").textContent = role;
+    card.querySelector(".record-name").title = name;
+    card.querySelector(".record-role").textContent = roles.join(" · ");
     wrap.appendChild(card);
   }
 

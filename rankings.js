@@ -482,13 +482,6 @@ function rankHue(score) {
   // estimator is. Those facts sit under the criterion so nobody has to go
   // and look them up before answering.
 
-  const compactMoney = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    notation: "compact",
-    maximumFractionDigits: 1,
-  });
-
   function namesIn(value) {
     const list = Array.isArray(value) ? value : [value];
     return list.map((v) => String(v || "").trim()).filter(Boolean);
@@ -520,8 +513,8 @@ function rankHue(score) {
     line.append(
       stat(`${r.won.length} won`, "good"),
       stat(`${r.lost.length} lost`, "bad"),
-      stat(`${compactMoney.format(r.wonValue)} won`, "good"),
-      stat(`${compactMoney.format(r.lostValue)} lost`, "bad")
+      stat(`${compactCurrency.format(r.wonValue)} won`, "good"),
+      stat(`${compactCurrency.format(r.lostValue)} lost`, "bad")
     );
     return line;
   }

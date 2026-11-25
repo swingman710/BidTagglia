@@ -1088,6 +1088,23 @@ textarea:focus {
 .record-card.poor {
   --rec: var(--red);
 }
+/* On the bid, but nothing of theirs has been decided yet. */
+.record-card.none {
+  --rec: var(--border-2);
+}
+
+.record-tally .good {
+  color: var(--green);
+}
+
+.record-tally .bad {
+  color: var(--red);
+}
+
+.record-money {
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
 
 .record-top {
   display: flex;
