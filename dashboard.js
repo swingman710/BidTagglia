@@ -455,7 +455,7 @@ function showLoadingRows(n = 12) {
   const tbody = document.getElementById("bid-rows");
   if (!tbody || tbody.childElementCount) return;
   document.getElementById("empty").style.display = "none";
-  const widths = [70, 45, 40, 55, 35, 50, 30, 60, 45]; // one per column
+  const widths = [70, 45, 40, 55, 35, 50, 60, 45, 30]; // one per column
   for (let i = 0; i < n; i++) {
     const tr = document.createElement("tr");
     tr.className = "skeleton-row";
@@ -1789,7 +1789,7 @@ function render() {
       statusTd.textContent = "—";
     }
 
-    tr.append(nameTd, numTd, divTd, dueTd, daysTd, valueTd, rankTd, pmTd, statusTd);
+    tr.append(nameTd, numTd, divTd, dueTd, daysTd, valueTd, pmTd, statusTd, rankTd);
     tr.className = "bid-row";
     tr.addEventListener("click", () => openDetail(opp));
     rows.appendChild(tr);
@@ -1811,12 +1811,12 @@ const EXPORT_TABLE_COLUMNS = [
   ["Bid due time", (o) => formatTime(o.bidDueTime)],
   ["Days until due", (o) => (hasCountdown(o) ? daysUntil(o.bidDueDate) : "")],
   ["Project value", (o) => oppValue(o) || ""],
+  ["Lead estimator", (o) => o.leadEstimator],
+  ["Status", (o) => o.status],
   ["Ranking", (o) => {
     const avg = window.BBRankings ? BBRankings.summaryFor(o.id).avg : null;
     return avg == null ? "" : avg.toFixed(1);
   }],
-  ["Lead estimator", (o) => o.leadEstimator],
-  ["Status", (o) => o.status],
 ];
 
 // Everything else on the bid, appended after the columns above.
