@@ -3871,6 +3871,11 @@ tr.quote-won .quote-company {
   color: var(--green, #16a34a);
 }
 
+/* "Budget Complete" is the longest step name; keep it on one line. */
+.status-steps .chev {
+  white-space: nowrap;
+}
+
 /* ==========================================================================
    OVERDUE TAB
    ========================================================================== */

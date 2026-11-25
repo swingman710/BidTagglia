@@ -3894,7 +3894,12 @@ async function updatePricingStatus(id, status) {
 
   const { error } = await sb.from(PRICING_TABLE).update({ status }).eq("id", id);
   if (error) {
-    toastError("Could not update status: " + error.message);
+    toastError(
+      error.message.includes("pricing_quotes_status_check")
+        ? `The database doesn't allow "${status}" yet — run ` +
+          "supabase_budget_complete.sql in the Supabase SQL editor."
+        : "Could not update status: " + error.message
+    );
     return;
   }
   renderPricing();
@@ -4011,7 +4016,7 @@ async function deletePricing(id) {
   });
 }
 
-const QUOTE_STATUSES = ["Draft", "Sent", "Won", "Lost", "Withdrawn"];
+const QUOTE_STATUSES = ["Draft", "Sent", "Won", "Budget Complete", "Lost", "Withdrawn"];
 
 // Where the add/edit quote form is mounted in the Pricing tab (set by
 // renderPricing, read by each row's Edit button).
@@ -4068,21 +4073,28 @@ function renderQuoteRow(q) {
   del.addEventListener("click", () => deletePricing(q.id));
   actions.appendChild(del);
 
-  // Bottom: Draft -> Sent -> Won chevrons. Only a proposal can be Won —
-  // a budgetary number isn't competing for the job.
+  // Bottom: the steps a price walks. A proposal ends Won; a budgetary
+  // number isn't competing for the job, so it ends Budget Complete instead —
+  // the budget is done, which decides nothing about the bid.
   const steps = document.createElement("div");
   steps.className = "status-steps";
-  const stages = q.type === "proposal" ? ["Draft", "Sent", "Won"] : ["Draft", "Sent"];
+  const stages =
+    q.type === "proposal"
+      ? ["Draft", "Sent", "Won"]
+      : ["Draft", "Sent", "Budget Complete"];
   for (const s of stages) {
     const b = document.createElement("button");
     b.type = "button";
     b.className =
-      "chev" + (q.status === s ? " is-active" : "") + (s === "Won" ? " win" : "");
+      "chev" + (q.status === s ? " is-active" : "") +
+      (s === "Won" || s === "Budget Complete" ? " win" : "");
     b.textContent = s;
     if (s === "Won") {
       b.title =
         "Mark this company as the winner: every other proposal on this bid " +
         "is marked lost and the bid moves to Won.";
+    } else if (s === "Budget Complete") {
+      b.title = "The budget for this company is finished.";
     }
     b.addEventListener("click", () => updatePricingStatus(q.id, s));
     steps.appendChild(b);
