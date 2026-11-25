@@ -15,33 +15,21 @@ document.getElementById("logout").addEventListener("click", () => {
 });
 
 // ---------- Settings menu ----------
-// The theme itself is applied by an inline script in <head>, before anything
-// is painted; this only handles switching it and remembering the choice.
-
-const THEME_KEY = "battag_theme";
-
-function setTheme(dark) {
-  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
-  try {
-    localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
-  } catch (e) {
-    console.error("Could not save the theme:", e);
-  }
-  // Chart.js bakes its colors in at construction, so the charts have to be
-  // rebuilt against the new palette rather than just restyled.
-  renderCharts(loadOpps());
-  refreshActiveView();
-}
+// theme.js applies the saved theme before either page is painted.
 
 {
   const btn = document.getElementById("settings-toggle");
   const menu = document.getElementById("settings-menu");
-  const toggle = document.getElementById("dark-toggle");
+  const themeSelect = document.getElementById("theme-select");
 
-  if (btn && menu && toggle) {
-    toggle.checked =
-      document.documentElement.getAttribute("data-theme") === "dark";
-    toggle.addEventListener("change", () => setTheme(toggle.checked));
+  if (btn && menu && themeSelect) {
+    themeSelect.value = document.documentElement.dataset.theme;
+    themeSelect.addEventListener("change", () => {
+      BBTheme.set(themeSelect.value);
+      // Chart.js reads its colors when the charts are built.
+      renderCharts(loadOpps());
+      refreshActiveView();
+    });
 
     const close = () => {
       menu.hidden = true;
@@ -55,7 +43,10 @@ function setTheme(dark) {
     menu.addEventListener("click", (e) => e.stopPropagation());
     document.addEventListener("click", close);
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && !menu.hidden) close();
+      if (e.key === "Escape" && !menu.hidden) {
+        close();
+        btn.focus();
+      }
     });
   }
 }

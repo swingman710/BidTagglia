@@ -10,6 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+    <script src="theme.js"></script>
     <link rel="stylesheet" href="styles.css" />
 
     <!-- Hide the app until access.js confirms this person is on the invite
@@ -23,16 +24,6 @@
     </style>
     <script>
       document.documentElement.classList.add("gate-pending");
-
-      // Set the theme before any markup is parsed. Doing it later means a
-      // flash of the light theme on every load for anyone using dark mode.
-      try {
-        if (localStorage.getItem("battag_theme") === "dark") {
-          document.documentElement.setAttribute("data-theme", "dark");
-        }
-      } catch (e) {
-        /* storage disabled — light theme is the right fallback */
-      }
     </script>
   </head>
   <body>
@@ -69,11 +60,12 @@
             <div id="settings-menu" class="settings-menu" hidden>
               <div class="settings-head">Settings</div>
               <label class="settings-row">
-                <span>
-                  Dark mode
-                  <small>Easier on the eyes in a dim office</small>
-                </span>
-                <input type="checkbox" id="dark-toggle" class="switch" />
+                <span>Color theme</span>
+                <select id="theme-select">
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                  <option value="evergreen">Evergreen</option>
+                </select>
               </label>
             </div>
           </div>
