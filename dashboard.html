@@ -89,6 +89,9 @@
         <button class="nav-tab" data-view="overdue">
           Overdue<span class="tab-badge" id="overdue-badge" hidden>0</span>
         </button>
+        <button class="nav-tab" data-view="ranking">
+          Ranking<span class="tab-badge" id="ranking-badge" hidden>0</span>
+        </button>
         <button class="nav-tab" data-view="reports">Reports</button>
         <button class="nav-tab" data-view="companies">Companies</button>
         <button class="nav-tab" data-view="contacts">Contacts</button>
@@ -223,6 +226,23 @@
           </div>
           <div id="overdue-body" class="overdue-body"></div>
           <div id="overdue-empty" class="empty">Nothing overdue — everything is up to date.</div>
+        </section>
+       </div>
+
+       <!-- ================= Ranking view ================= -->
+       <div class="view" id="view-ranking" hidden>
+        <section class="panel">
+          <div class="table-head">
+            <h2>Ranking requests</h2>
+            <span id="ranking-count" class="count-pill">0</span>
+            <span class="rep-hint">
+              Bids you've been asked to rank. Score each one 1 (very
+              unfavorable) to 4 (very favorable); the bid shows the average of
+              everyone's scores out of 100.
+            </span>
+          </div>
+          <div id="ranking-body" class="ranking-body"></div>
+          <div id="ranking-empty" class="empty">No ranking requests.</div>
         </section>
        </div>
 
@@ -877,6 +897,29 @@
       </div>
     </div>
 
+    <!-- Request ranking: who to ask. Comes after the detail modal so it sits
+         on top of it. -->
+    <div id="rank-modal" class="modal-overlay" hidden>
+      <div class="modal">
+        <div class="modal-head">
+          <h2>Request ranking</h2>
+          <button class="modal-close" id="rank-close" title="Close">✕</button>
+        </div>
+        <p class="export-count">
+          Who should rank <span id="rank-modal-bid"></span>?
+        </p>
+        <div class="field">
+          <input type="text" id="rank-search" placeholder="Search users…"
+                 autocomplete="off" />
+        </div>
+        <div id="rank-people" class="rank-people"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" id="rank-cancel">Cancel</button>
+          <button type="button" class="btn-primary" id="rank-go">Send</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Company detail (Companies tab) -->
     <div id="company-modal" class="modal-overlay" hidden>
       <div class="modal">
@@ -955,5 +998,6 @@
     <script src="activities.js"></script>
     <script src="calendar.js"></script>
     <script src="users.js"></script>
+    <script src="rankings.js"></script>
   </body>
 </html>

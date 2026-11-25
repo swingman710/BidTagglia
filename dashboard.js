@@ -3411,6 +3411,8 @@ function renderDetail(o) {
   printBtn.textContent = "Print";
   printBtn.addEventListener("click", () => printBid(o));
   bar.append(editBtn, printBtn);
+  // The ranking ring and the Request ranking button.
+  if (window.BBRankings) BBRankings.decorateDetail(o, bar);
   pane.appendChild(bar);
 
   renderDuplicateNote(o, pane);
@@ -3497,6 +3499,14 @@ document.addEventListener("keydown", (e) => {
 
 const PRICING_TABLE = "pricing_quotes";
 const MEMBERS_TABLE = "project_members";
+// Who was asked to rank a bid, and what they gave it. See rankings.js.
+const RANKINGS_TABLE = "bid_rankings";
+
+// A table that hasn't been created yet: PGRST205 from PostgREST, 42P01 from
+// Postgres. Lets a feature whose migration hasn't been run stay out of the way.
+function isMissingTable(error) {
+  return !!error && (error.code === "PGRST205" || error.code === "42P01");
+}
 
 async function fetchPricing(oppId) {
   const { data, error } = await sb
@@ -4033,13 +4043,14 @@ async function updateOpp(id, opp) {
   if (await syncOppRow(id)) afterOppsChanged();
 }
 
-// Removes the bid and its child rows (pricing quotes, project team), which
-// have no FK cascade — they're keyed on the stringified opportunity id.
+// Removes the bid and its child rows (pricing quotes, project team, rankings),
+// which have no FK cascade — they're keyed on the stringified opportunity id.
 async function deleteOpp(id) {
   const oppId = String(id);
-  for (const table of [PRICING_TABLE, MEMBERS_TABLE]) {
+  for (const table of [PRICING_TABLE, MEMBERS_TABLE, RANKINGS_TABLE]) {
     const { error } = await sb.from(table).delete().eq("opportunity_id", oppId);
-    if (error) {
+    // No rankings table yet means no rankings to delete.
+    if (error && !(table === RANKINGS_TABLE && isMissingTable(error))) {
       toastError("Could not delete opportunity: " + error.message);
       return;
     }

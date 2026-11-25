@@ -4206,3 +4206,360 @@ body.snapshot-mode::after {
   pointer-events: none;
   z-index: 9999;
 }
+
+/* ==========================================================================
+   RANKINGS — the score ring, the request picker and the Ranking tab
+   ========================================================================== */
+
+/* The score in a ring. The arc is the score out of 100; its colour comes from
+   --rank-hue, set per ring by rankings.js (red 0 through green ~130). */
+.rank-ring {
+  --rank-color: hsl(var(--rank-hue, 0) 72% 40%);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  flex: none;
+}
+
+:root[data-theme="dark"] .rank-ring {
+  --rank-color: hsl(var(--rank-hue, 0) 75% 62%);
+}
+
+.rank-ring.is-pending {
+  --rank-color: var(--faint);
+}
+
+.rank-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.rank-track {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 3.2;
+}
+
+.rank-arc {
+  fill: none;
+  stroke: var(--rank-color);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+}
+
+.rank-num {
+  position: relative;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--rank-color);
+  font-variant-numeric: tabular-nums;
+}
+
+.rank-ring.sm {
+  width: 34px;
+  height: 34px;
+}
+
+.rank-ring.sm .rank-num {
+  font-size: 12px;
+}
+
+/* On the bid: the ring at the left end of the Edit / Print bar. */
+.pane-actions {
+  align-items: center;
+  gap: 8px;
+}
+
+.rank-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: auto;
+}
+
+.rank-caption {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.rank-caption strong {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+/* Request picker */
+.rank-people {
+  max-height: 46vh;
+  overflow: auto;
+}
+
+.rank-person input:disabled + span {
+  color: var(--muted);
+}
+
+#rank-go:disabled {
+  opacity: 0.55;
+  cursor: default;
+  background: var(--blue);
+  border-color: var(--blue);
+}
+
+/* Ranking tab */
+.ranking-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+
+.ranking-body:empty {
+  display: none;
+}
+
+.rk-section {
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.rk-card {
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.rk-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  flex-wrap: wrap;
+}
+
+.rk-card:not(.is-done) .rk-head,
+.rk-card.is-done .rk-head:not(:last-child) {
+  border-bottom: 1px solid var(--border);
+  background: var(--band);
+}
+
+.rk-open {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: var(--sans);
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.rk-open:disabled {
+  cursor: default;
+}
+
+.rk-open:not(:disabled):hover .rk-name {
+  text-decoration: underline;
+}
+
+.rk-name {
+  font-size: 14px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rk-meta {
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.rk-yours {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.rk-overall {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rk-overall-cap {
+  font-size: 11.5px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.rk-form {
+  padding: 4px 14px 14px;
+}
+
+/* Criteria down the side, the four answers across. */
+.rk-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) 56px repeat(4, minmax(64px, 112px));
+  align-items: center;
+  gap: 6px;
+  padding: 5px 0;
+}
+
+.rk-row + .rk-row {
+  border-top: 1px solid var(--border);
+}
+
+.rk-row-head {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--head-text);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.rk-level-head {
+  text-align: center;
+  line-height: 1.25;
+}
+
+.rk-crit {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rk-row-head .rk-crit {
+  font-size: 11px;
+  color: var(--head-text);
+}
+
+.rk-weight {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  padding-right: 6px;
+}
+
+.rk-row-head .rk-weight {
+  font-size: 11px;
+  color: var(--head-text);
+}
+
+.rk-pick {
+  height: 30px;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid var(--border-2);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.rk-pick:hover {
+  border-color: var(--blue);
+  color: var(--blue-dark);
+}
+
+.rk-pick:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+/* Picked answers take the colour of what they mean. */
+.rk-pick[aria-pressed="true"] {
+  color: #fff;
+}
+.rk-pick.lv1[aria-pressed="true"] { background: hsl(0 68% 48%); border-color: hsl(0 68% 48%); }
+.rk-pick.lv2[aria-pressed="true"] { background: hsl(28 85% 46%); border-color: hsl(28 85% 46%); }
+.rk-pick.lv3[aria-pressed="true"] { background: hsl(100 50% 38%); border-color: hsl(100 50% 38%); }
+.rk-pick.lv4[aria-pressed="true"] { background: hsl(140 62% 32%); border-color: hsl(140 62% 32%); }
+
+.rk-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.rk-score {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.rk-total {
+  font-size: 18px;
+  font-weight: 800;
+  color: hsl(var(--rank-hue, 0) 72% 40%);
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-theme="dark"] .rk-total {
+  color: hsl(var(--rank-hue, 0) 75% 62%);
+}
+
+.rk-total.is-empty,
+:root[data-theme="dark"] .rk-total.is-empty {
+  color: var(--faint);
+}
+
+.rk-left {
+  flex: 1;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.rk-foot .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+  background: var(--blue);
+  border-color: var(--blue);
+}
+
+/* Narrow screens: the answer labels go, the buttons keep their numbers (and
+   their tooltips), and each criterion's buttons drop under its name. */
+@media (max-width: 640px) {
+  .rk-row {
+    grid-template-columns: 1fr 44px;
+  }
+  .rk-row-head .rk-level-head {
+    display: none;
+  }
+  .rk-pick {
+    grid-row: 2;
+  }
+  .rk-row:not(.rk-row-head) {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .rk-row:not(.rk-row-head) .rk-crit {
+    grid-column: 1 / 4;
+  }
+  .rk-row:not(.rk-row-head) .rk-weight {
+    grid-column: 4;
+  }
+}
