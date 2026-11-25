@@ -15,21 +15,33 @@ document.getElementById("logout").addEventListener("click", () => {
 });
 
 // ---------- Settings menu ----------
-// theme.js applies the saved theme before either page is painted.
+// The theme itself is applied by an inline script in <head>, before anything
+// is painted; this only handles switching it and remembering the choice.
+
+const THEME_KEY = "battag_theme";
+
+function setTheme(dark) {
+  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+  try {
+    localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
+  } catch (e) {
+    console.error("Could not save the theme:", e);
+  }
+  // Chart.js bakes its colors in at construction, so the charts have to be
+  // rebuilt against the new palette rather than just restyled.
+  renderCharts(loadOpps());
+  refreshActiveView();
+}
 
 {
   const btn = document.getElementById("settings-toggle");
   const menu = document.getElementById("settings-menu");
-  const themeSelect = document.getElementById("theme-select");
+  const toggle = document.getElementById("dark-toggle");
 
-  if (btn && menu && themeSelect) {
-    themeSelect.value = document.documentElement.dataset.theme;
-    themeSelect.addEventListener("change", () => {
-      BBTheme.set(themeSelect.value);
-      // Chart.js reads its colors when the charts are built.
-      renderCharts(loadOpps());
-      refreshActiveView();
-    });
+  if (btn && menu && toggle) {
+    toggle.checked =
+      document.documentElement.getAttribute("data-theme") === "dark";
+    toggle.addEventListener("change", () => setTheme(toggle.checked));
 
     const close = () => {
       menu.hidden = true;
@@ -43,10 +55,7 @@ document.getElementById("logout").addEventListener("click", () => {
     menu.addEventListener("click", (e) => e.stopPropagation());
     document.addEventListener("click", close);
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && !menu.hidden) {
-        close();
-        btn.focus();
-      }
+      if (e.key === "Escape" && !menu.hidden) close();
     });
   }
 }

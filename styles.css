@@ -125,40 +125,6 @@
   color-scheme: dark;
 }
 
-:root[data-theme="evergreen"] {
-  --nav: #173e36;
-  --nav-2: #245449;
-  --nav-text: #e0eee9;
-  --nav-muted: #b3cec5;
-  --nav-accent: #80dfc0;
-
-  --page-bg: #eef5f1;
-  --surface: #fbfefa;
-  --band: #e1eee7;
-  --band-2: #d4e9df;
-  --zebra: #f2f8f4;
-
-  --blue: #08775f;
-  --blue-dark: #065a47;
-  --blue-soft: #e1f3eb;
-  --chip-blue: #075b48;
-  --col-accent: #e4eee4;
-  --col-accent-bd: #cbdccd;
-
-  --border: #d2e2d8;
-  --border-2: #a6bfb2;
-  --grid: #dbe9e0;
-  --line: #d2e2d8;
-
-  --ink: #18362d;
-  --text: #345449;
-  --muted: #4a655b;
-  --head-text: #3d5c50;
-  --faint: #567065;
-  --selection: #c8eadc;
-  --ring: 0 0 0 3px rgba(8, 119, 95, 0.25);
-}
-
 * {
   box-sizing: border-box;
   margin: 0;
@@ -180,7 +146,7 @@ body {
 }
 
 ::selection {
-  background: var(--selection, rgba(69, 125, 242, 0.2));
+  background: rgba(69, 125, 242, 0.2);
   color: var(--ink);
 }
 
@@ -498,7 +464,7 @@ textarea:focus {
 
 .nav-tab.active {
   color: #fff;
-  border-bottom-color: var(--nav-accent, var(--blue));
+  border-bottom-color: var(--blue);
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -1409,10 +1375,53 @@ textarea:focus {
   background: var(--band);
 }
 
-.settings-row select {
-  min-width: 112px;
-  padding: 5px 8px;
-  font-size: inherit;
+.settings-row small {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+/* A checkbox drawn as a sliding switch. */
+.switch {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--border-2);
+  border: 0;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.16s ease;
+}
+
+.switch:checked {
+  background: var(--blue);
+}
+
+.switch:checked::after {
+  transform: translateX(16px);
+}
+
+.switch:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
 }
 
 /* ---- Hide-status menu ---- */
