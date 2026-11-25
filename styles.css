@@ -4563,3 +4563,46 @@ body.snapshot-mode::after {
     grid-column: 4;
   }
 }
+
+/* Facts under a criterion: the CM/owner and our record with them, the job's
+   location, the estimator's load. */
+.rk-ctx {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 3px;
+}
+
+.rk-ctx-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.rk-ctx-name {
+  font-weight: 600;
+  color: var(--blue-dark);
+}
+
+.rk-ctx-stat {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rk-ctx-stat.good {
+  color: var(--green);
+}
+
+.rk-ctx-stat.bad {
+  color: var(--red);
+}
+
+.rk-ctx-muted {
+  color: var(--faint);
+  font-weight: 400;
+}

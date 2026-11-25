@@ -458,7 +458,102 @@ function rankHue(score) {
     renderRanking();
   }
 
-  function buildScoreForm(row) {
+  // ---------- What the scorer needs to know ----------
+  // Some criteria are judgments about facts the tracker already has — who the
+  // CM is and how we've done with them, where the job is, how loaded the
+  // estimator is. Those facts sit under the criterion so nobody has to go
+  // and look them up before answering.
+
+  const compactMoney = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  });
+
+  function namesIn(value) {
+    const list = Array.isArray(value) ? value : [value];
+    return list.map((v) => String(v || "").trim()).filter(Boolean);
+  }
+
+  // "Turner  ·  12 won · 8 lost  ·  $4.2M won · $3.1M lost"
+  function companyLine(name) {
+    const r = companyRecord(name);
+    const line = document.createElement("span");
+    line.className = "rk-ctx-line";
+    const who = document.createElement("span");
+    who.className = "rk-ctx-name";
+    who.textContent = canonicalCompany(name);
+    line.appendChild(who);
+
+    if (!r.won.length && !r.lost.length) {
+      const none = document.createElement("span");
+      none.className = "rk-ctx-muted";
+      none.textContent = "no decided bids yet";
+      line.appendChild(none);
+      return line;
+    }
+    const stat = (text, tone) => {
+      const s = document.createElement("span");
+      s.className = `rk-ctx-stat ${tone}`;
+      s.textContent = text;
+      return s;
+    };
+    line.append(
+      stat(`${r.won.length} won`, "good"),
+      stat(`${r.lost.length} lost`, "bad"),
+      stat(`${compactMoney.format(r.wonValue)} won`, "good"),
+      stat(`${compactMoney.format(r.lostValue)} lost`, "bad")
+    );
+    return line;
+  }
+
+  function mutedLine(text) {
+    const line = document.createElement("span");
+    line.className = "rk-ctx-line rk-ctx-muted";
+    line.textContent = text;
+    return line;
+  }
+
+  // Lines to show under a criterion for this bid, or [] for none.
+  function criterionContext(key, o) {
+    if (!o) return [];
+    if (key === "cm_gc_relationship") {
+      const names = namesIn(o.cm);
+      return names.length ? names.map(companyLine) : [mutedLine("No CM/GC on this bid")];
+    }
+    if (key === "owner_relationship") {
+      const names = namesIn(o.ownerCustomer);
+      return names.length ? names.map(companyLine) : [mutedLine("No owner on this bid")];
+    }
+    if (key === "location") {
+      const place = [o.city, o.state].map((v) => String(v || "").trim()).filter(Boolean);
+      return [place.length ? mutedLine(place.join(", ")) : mutedLine("No location on this bid")];
+    }
+    if (key === "estimator_capacity") {
+      const who = String(o.leadEstimator || "").trim();
+      if (!who) return [mutedLine("No lead estimator on this bid")];
+      const n = loadOpps().filter(
+        (x) =>
+          isActive(x) &&
+          String(x.leadEstimator || "").trim().toLowerCase() === who.toLowerCase()
+      ).length;
+      const line = document.createElement("span");
+      line.className = "rk-ctx-line";
+      const name = document.createElement("span");
+      name.className = "rk-ctx-name";
+      name.textContent = who;
+      const count = document.createElement("span");
+      count.className = "rk-ctx-stat";
+      count.textContent = `${n} active bid${n === 1 ? "" : "s"}`;
+      count.title = `Bids led by ${who} at ${ACTIVE_STATUSES.join(", ")}`;
+      line.append(name, count);
+      return [line];
+    }
+    return [];
+  }
+
+  function buildScoreForm(row, o) {
     if (!drafts.has(row.id)) drafts.set(row.id, { ...(row.scores || {}) });
     const answers = drafts.get(row.id);
 
@@ -501,6 +596,13 @@ function rankHue(score) {
       const label = document.createElement("span");
       label.className = "rk-crit";
       label.textContent = c.label;
+      const context = criterionContext(c.key, o);
+      if (context.length) {
+        const ctx = document.createElement("span");
+        ctx.className = "rk-ctx";
+        ctx.append(...context);
+        label.appendChild(ctx);
+      }
       const weight = document.createElement("span");
       weight.className = "rk-weight";
       weight.textContent = `${c.weight}%`;
@@ -616,7 +718,7 @@ function rankHue(score) {
     head.appendChild(overall);
 
     card.appendChild(head);
-    if (!row.submitted_at || editing.has(row.id)) card.appendChild(buildScoreForm(row));
+    if (!row.submitted_at || editing.has(row.id)) card.appendChild(buildScoreForm(row, o));
     return card;
   }
 

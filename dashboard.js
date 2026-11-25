@@ -420,7 +420,7 @@ function forgetOppRow(id) {
 // all are ignored. Every company named on a quote is registered here too.
 async function fetchQuotes() {
   const { rows, error } = await fetchAll(PRICING_TABLE, {
-    select: "opportunity_id, company, type, price, price_sent_on, created_at",
+    select: "opportunity_id, company, type, price, price_sent_on, status, created_at",
   });
   if (error) return quotesCache;
   quotesCache = rows;
@@ -3299,6 +3299,24 @@ function bidsForCompany(name) {
   return loadOpps().filter(
     (o) => quoted.has(String(o.id)) || companiesOnBid(o).has(key)
   );
+}
+
+// A company's won and lost bids, by count and by value. Shared by the
+// Companies tab and the Ranking tab, so the two can't tell different stories.
+function companyRecord(name) {
+  const key = companyKey(canonicalCompany(name));
+  const bids = bidsForCompany(name);
+  // Won/lost for THEM, which is not the same as the bid's own status: when
+  // one proposal is marked Won, the companies on the other proposals lost
+  // it, while the CM, owner and the rest won it alongside us.
+  const won = bids.filter((o) => outcomeForCompany(o, key) === "Won");
+  const lost = bids.filter((o) => outcomeForCompany(o, key) === "Lost");
+  const value = (list) =>
+    list.reduce(
+      (s, o) => s + (Number(o.finalPrice) || Number(o.budgetedProjectValue) || 0),
+      0
+    );
+  return { bids, won, lost, wonValue: value(won), lostValue: value(lost) };
 }
 
 // ---------- Track record ----------

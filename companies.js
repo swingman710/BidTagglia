@@ -407,23 +407,11 @@ const COMPANY_INDUSTRIES = [
     if (!mount) return;
     mount.innerHTML = "";
 
-    const key = companyKey(name);
     // Every bid they're attached to: priced to, or named on the bid as the
-    // CM/GC, owner, architect or engineer.
-    const bids = bidsForCompany(name);
+    // CM/GC, owner, architect or engineer — and how each one went for them.
+    const { bids, won, lost, wonValue, lostValue } = companyRecord(name);
     if (!bids.length) return;
-
-    // Won/lost for THEM, which is not the same as the bid's own status: when
-    // one proposal is marked Won, the companies on the other proposals lost
-    // it, while the CM, owner and the rest won it alongside us.
-    const won = bids.filter((o) => outcomeForCompany(o, key) === "Won");
-    const lost = bids.filter((o) => outcomeForCompany(o, key) === "Lost");
     const decided = won.length + lost.length;
-    const value = (list) =>
-      list.reduce(
-        (s, o) => s + (Number(o.finalPrice) || Number(o.budgetedProjectValue) || 0),
-        0
-      );
     const rate = decided ? Math.round((won.length / decided) * 100) : null;
 
     const sec = document.createElement("section");
@@ -461,8 +449,8 @@ const COMPANY_INDUSTRIES = [
       ["Lost", lost.length, "bad"],
     ]);
     addStats("values", [
-      ["Value won", currency.format(value(won)), "good"],
-      ["Value lost", currency.format(value(lost)), "bad"],
+      ["Value won", currency.format(wonValue), "good"],
+      ["Value lost", currency.format(lostValue), "bad"],
     ]);
 
     if (decided) {
